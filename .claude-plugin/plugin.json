@@ -1,0 +1,36 @@
+{
+  "name": "cheesecake",
+  "version": "0.0.1",
+  "description": "CheeseCake: A structured OOP programming language for AI agent orchestration",
+  "author": "Rupesh Raj",
+  "homepage": "https://github.com/cheesecake-lang/cheesecake",
+  "license": "MIT",
+  "keywords": [
+    "ai-orchestration",
+    "agent-programming",
+    "workflow-automation",
+    "ai-agents",
+    "agentic-ai"
+  ],
+  "main": {
+    "skills": ["cheesecake/SKILL.md"],
+    "commands": [
+      "cheesecake.md",
+      "cheesecake-run.md",
+      "cheesecake-init.md",
+      "cheesecake-create.md",
+      "cheesecake-validate.md",
+      "cheesecake-explain.md",
+      "cheesecake-help.md"
+    ],
+    "agents": [
+      "vm/AGENT.md",
+      "helper/AGENT.md"
+    ]
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cheesecake-lang/cheesecake"
+  }
+}

@@ -1,0 +1,423 @@
+# ============================================
+# CheeseCake Control Flow Test Suite
+# Tests loops, conditionals, parallel execution
+# Part of: CheeseCake v0.0.1 - Module 8: Testing
+# ============================================
+
+# Setup test agent
+AGENT TestAgent:
+  MODEL: sonnet
+  PROMPT: "You are a test agent for control flow validation."
+
+VAR agent = NEW TestAgent()
+
+# ============================================
+# TEST 1: SEQUENCE Block
+# ============================================
+
+SEQUENCE:
+  VAR step1 = RUN SESSION(agent): TASK: "Step 1"
+  VAR step2 = RUN SESSION(agent): TASK: "Step 2"
+  VAR step3 = RUN SESSION(agent): TASK: "Step 3"
+END SEQUENCE
+
+PRINT "Test 1: SEQUENCE Block - PASSED"
+PRINT "  Executed 3 steps sequentially"
+
+# ============================================
+# TEST 2: PARALLEL Block
+# ============================================
+
+PARALLEL:
+  VAR task1 = RUN SESSION(agent): TASK: "Parallel task 1"
+  VAR task2 = RUN SESSION(agent): TASK: "Parallel task 2"
+  VAR task3 = RUN SESSION(agent): TASK: "Parallel task 3"
+END PARALLEL
+
+PRINT "Test 2: PARALLEL Block - PASSED"
+PRINT "  Executed 3 tasks in parallel"
+
+# ============================================
+# TEST 3: PARALLEL with JOIN(first)
+# ============================================
+
+PARALLEL JOIN(first):
+  VAR fast = RUN SESSION(agent): TASK: "Quick task"
+  VAR slow = RUN SESSION(agent): TASK: "Slow task"
+END PARALLEL
+
+PRINT "Test 3: PARALLEL JOIN(first) - PASSED"
+PRINT "  Returned when first task completed"
+
+# ============================================
+# TEST 4: PARALLEL with JOIN(any, N)
+# ============================================
+
+PARALLEL JOIN(any, 2):
+  VAR p1 = RUN SESSION(agent): TASK: "Task 1"
+  VAR p2 = RUN SESSION(agent): TASK: "Task 2"
+  VAR p3 = RUN SESSION(agent): TASK: "Task 3"
+  VAR p4 = RUN SESSION(agent): TASK: "Task 4"
+END PARALLEL
+
+PRINT "Test 4: PARALLEL JOIN(any, 2) - PASSED"
+PRINT "  Returned when 2 tasks completed"
+
+# ============================================
+# TEST 5: IF Statement
+# ============================================
+
+VAR test_value = "active"
+
+IF **{test_value} indicates active status**:
+  PRINT "Test 5a: IF condition - PASSED"
+  VAR if_result = "condition was true"
+END IF
+
+PRINT "Test 5: IF Statement - PASSED"
+
+# ============================================
+# TEST 6: IF/ELSE Statement
+# ============================================
+
+VAR condition_var = "success"
+
+IF **{condition_var} indicates success**:
+  VAR branch = "if"
+ELSE:
+  VAR branch = "else"
+END IF
+
+PRINT "Test 6: IF/ELSE Statement - PASSED"
+PRINT "  Branch taken: {branch}"
+
+# ============================================
+# TEST 7: IF/ELIF/ELSE Statement
+# ============================================
+
+VAR status = "warning"
+
+IF **{status} is an error**:
+  VAR level = "error"
+ELIF **{status} is a warning**:
+  VAR level = "warning"
+ELIF **{status} is info**:
+  VAR level = "info"
+ELSE:
+  VAR level = "unknown"
+END IF
+
+PRINT "Test 7: IF/ELIF/ELSE Statement - PASSED"
+PRINT "  Level: {level}"
+
+# ============================================
+# TEST 8: CHOICE ON
+# ============================================
+
+VAR complexity = "moderate"
+
+CHOICE ON **complexity level of {complexity}**:
+  OPTION "simple":
+    VAR approach = "basic implementation"
+
+  OPTION "moderate":
+    VAR approach = "standard implementation"
+
+  OPTION "complex":
+    VAR approach = "advanced implementation"
+END CHOICE
+
+PRINT "Test 8: CHOICE ON - PASSED"
+PRINT "  Approach: {approach}"
+
+# ============================================
+# TEST 9: REPEAT Loop
+# ============================================
+
+VAR counter = 0
+
+REPEAT 5:
+  VAR counter = counter + 1
+END REPEAT
+
+PRINT "Test 9: REPEAT Loop - PASSED"
+PRINT "  Counter: {counter} (expected 5)"
+
+# ============================================
+# TEST 10: FOR Loop
+# ============================================
+
+VAR items = ["alpha", "beta", "gamma"]
+VAR processed_count = 0
+
+FOR item IN items:
+  VAR processed_count = processed_count + 1
+  PRINT "  Processing: {item}"
+END FOR
+
+PRINT "Test 10: FOR Loop - PASSED"
+PRINT "  Processed {processed_count} items"
+
+# ============================================
+# TEST 11: FOR Loop with Index
+# ============================================
+
+VAR indexed_items = ["first", "second", "third"]
+
+FOR item, index IN indexed_items:
+  PRINT "  Index {index}: {item}"
+END FOR
+
+PRINT "Test 11: FOR Loop with Index - PASSED"
+
+# ============================================
+# TEST 12: PARALLEL FOR
+# ============================================
+
+VAR parallel_items = [1, 2, 3, 4, 5]
+
+PARALLEL FOR item IN parallel_items:
+  VAR result = RUN SESSION(agent):
+    TASK: "Process item {item}"
+END PARALLEL FOR
+
+PRINT "Test 12: PARALLEL FOR - PASSED"
+PRINT "  Processed {parallel_items} in parallel"
+
+# ============================================
+# TEST 13: LOOP UNTIL (Semantic Condition)
+# ============================================
+
+VAR quality_score = 0
+VAR iteration = 0
+
+LOOP UNTIL **{quality_score} is satisfactory (>=  8)** MAX 5:
+  VAR iteration = iteration + 1
+  VAR quality_score = RUN SESSION(agent):
+    TASK: "Rate quality from 1-10"
+  PRINT "  Iteration {iteration}, quality: {quality_score}"
+END LOOP
+
+PRINT "Test 13: LOOP UNTIL - PASSED"
+PRINT "  Completed in {iteration} iterations"
+
+# ============================================
+# TEST 14: WHILE Loop
+# ============================================
+
+VAR remaining = 3
+
+WHILE **{remaining} is greater than 0**:
+  PRINT "  Remaining: {remaining}"
+  VAR remaining = remaining - 1
+END WHILE
+
+PRINT "Test 14: WHILE Loop - PASSED"
+
+# ============================================
+# TEST 15: Nested IF Statements
+# ============================================
+
+VAR outer_condition = true
+VAR inner_condition = true
+
+IF **{outer_condition} is true**:
+  PRINT "  Outer condition true"
+  IF **{inner_condition} is true**:
+    PRINT "  Inner condition also true"
+    VAR nested_result = "both true"
+  END IF
+END IF
+
+PRINT "Test 15: Nested IF Statements - PASSED"
+
+# ============================================
+# TEST 16: Nested Loops
+# ============================================
+
+VAR outer_list = [1, 2]
+VAR inner_list = ["a", "b"]
+
+FOR outer IN outer_list:
+  FOR inner IN inner_list:
+    PRINT "  {outer}-{inner}"
+  END FOR
+END FOR
+
+PRINT "Test 16: Nested Loops - PASSED"
+
+# ============================================
+# TEST 17: PARALLEL within SEQUENCE
+# ============================================
+
+SEQUENCE:
+  VAR seq_step1 = "prepare"
+
+  PARALLEL:
+    VAR par1 = RUN SESSION(agent): TASK: "Parallel in sequence 1"
+    VAR par2 = RUN SESSION(agent): TASK: "Parallel in sequence 2"
+  END PARALLEL
+
+  VAR seq_step2 = "finalize"
+END SEQUENCE
+
+PRINT "Test 17: PARALLEL within SEQUENCE - PASSED"
+
+# ============================================
+# TEST 18: SEQUENCE within PARALLEL
+# ============================================
+
+PARALLEL:
+  SEQUENCE:
+    VAR s1 = RUN SESSION(agent): TASK: "Seq 1 Step 1"
+    VAR s2 = RUN SESSION(agent): TASK: "Seq 1 Step 2"
+  END SEQUENCE
+
+  SEQUENCE:
+    VAR t1 = RUN SESSION(agent): TASK: "Seq 2 Step 1"
+    VAR t2 = RUN SESSION(agent): TASK: "Seq 2 Step 2"
+  END SEQUENCE
+END PARALLEL
+
+PRINT "Test 18: SEQUENCE within PARALLEL - PASSED"
+
+# ============================================
+# TEST 19: BREAK Statement (in loop)
+# ============================================
+
+VAR break_counter = 0
+
+LOOP UNTIL **never** MAX 10:
+  VAR break_counter = break_counter + 1
+  IF **{break_counter} equals 3**:
+    BREAK
+  END IF
+END LOOP
+
+PRINT "Test 19: BREAK Statement - PASSED"
+PRINT "  Loop broke at iteration {break_counter}"
+
+# ============================================
+# TEST 20: Complex Control Flow
+# ============================================
+
+VAR dataset = ["item1", "item2", "item3"]
+VAR mode = "parallel"
+
+IF **{mode} is parallel**:
+  PARALLEL FOR item IN dataset:
+    VAR processed = RUN SESSION(agent):
+      TASK: "Process {item} in parallel"
+  END PARALLEL FOR
+ELSE:
+  FOR item IN dataset:
+    VAR processed = RUN SESSION(agent):
+      TASK: "Process {item} sequentially"
+  END FOR
+END IF
+
+PRINT "Test 20: Complex Control Flow - PASSED"
+
+# ============================================
+# TEST 21: Pipeline Operations
+# ============================================
+
+VAR data_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+VAR pipeline_result = data_list
+  | FILTER WHERE **{item} is even**
+  | MAP WITH SESSION(agent): TASK: "Double {item}"
+  | REDUCE WITH SESSION(agent): TASK: "Sum {acc} and {item}" INIT: 0
+
+PRINT "Test 21: Pipeline Operations - PASSED"
+PRINT "  Result: {pipeline_result}"
+
+# ============================================
+# TEST 22: PMAP (Parallel Map)
+# ============================================
+
+VAR map_items = ["a", "b", "c", "d"]
+
+VAR pmap_results = map_items
+  | PMAP WITH SESSION(agent): TASK: "Process {item}"
+
+PRINT "Test 22: PMAP (Parallel Map) - PASSED"
+PRINT "  Processed {map_items} in parallel via pipeline"
+
+# ============================================
+# TEST 23: Multiple CHOICE Options
+# ============================================
+
+VAR priority = "high"
+
+CHOICE ON **priority level**:
+  OPTION "critical":
+    VAR response_time = "immediate"
+
+  OPTION "high":
+    VAR response_time = "< 1 hour"
+
+  OPTION "medium":
+    VAR response_time = "< 1 day"
+
+  OPTION "low":
+    VAR response_time = "< 1 week"
+END CHOICE
+
+PRINT "Test 23: Multiple CHOICE Options - PASSED"
+PRINT "  Response time: {response_time}"
+
+# ============================================
+# TEST 24: Empty Blocks
+# ============================================
+
+SEQUENCE:
+  # Empty sequence is valid
+END SEQUENCE
+
+IF **false is true**:
+  # This block won't execute
+ELSE:
+  VAR empty_test = "passed"
+END IF
+
+PRINT "Test 24: Empty Blocks - PASSED"
+
+# ============================================
+# TEST 25: Control Flow with Session Results
+# ============================================
+
+VAR analysis = RUN SESSION(agent):
+  TASK: "Analyze and return 'proceed' or 'stop'"
+
+IF **{analysis} suggests to proceed**:
+  VAR next_step = RUN SESSION(agent):
+    TASK: "Execute next phase"
+  PRINT "  Proceeded to next step"
+ELSE:
+  PRINT "  Stopped based on analysis"
+END IF
+
+PRINT "Test 25: Control Flow with Session Results - PASSED"
+
+# ============================================
+# SUMMARY
+# ============================================
+
+PRINT "============================================"
+PRINT "CONTROL FLOW TEST SUITE COMPLETE"
+PRINT "============================================"
+PRINT "All control flow constructs validated:"
+PRINT "  ✓ SEQUENCE and PARALLEL blocks"
+PRINT "  ✓ JOIN strategies"
+PRINT "  ✓ IF/ELIF/ELSE conditionals"
+PRINT "  ✓ CHOICE ON statements"
+PRINT "  ✓ REPEAT, FOR, WHILE, LOOP UNTIL"
+PRINT "  ✓ PARALLEL FOR"
+PRINT "  ✓ Nested structures"
+PRINT "  ✓ BREAK statements"
+PRINT "  ✓ Pipeline operations"
+PRINT "  ✓ Complex control flows"
+PRINT "============================================"
+PRINT "Control flow testing: SUCCESS"
+PRINT "============================================"

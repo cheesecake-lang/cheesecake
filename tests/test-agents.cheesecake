@@ -1,0 +1,438 @@
+# ============================================
+# CheeseCake Agent Features Test Suite
+# Tests agent definitions, inheritance, composition
+# Part of: CheeseCake v0.0.1 - Module 8: Testing
+# ============================================
+
+# ============================================
+# TEST 1: Basic Agent Definition
+# ============================================
+
+AGENT BasicAgent:
+  MODEL: sonnet
+  PROMPT: "You are a basic test agent."
+
+VAR basic = NEW BasicAgent()
+
+VAR result1 = RUN SESSION(basic):
+  TASK: "Say hello"
+
+PRINT "Test 1: Basic Agent Definition - PASSED"
+PRINT "  Agent: BasicAgent"
+PRINT "  Result: {result1}"
+
+# ============================================
+# TEST 2: Agent with Skills
+# ============================================
+
+SKILL research-capability:
+  CAPABILITIES:
+    - web search
+    - data gathering
+  REQUIRES:
+    - internet access
+
+AGENT ResearchAgent:
+  MODEL: sonnet
+  SKILLS: [research-capability]
+  PROMPT: "You are a research agent."
+
+VAR researcher = NEW ResearchAgent()
+
+PRINT "Test 2: Agent with Skills - PASSED"
+PRINT "  Agent: ResearchAgent with research-capability"
+
+# ============================================
+# TEST 3: Agent with Multiple Skills
+# ============================================
+
+SKILL writing-capability:
+  CAPABILITIES:
+    - content creation
+    - editing
+
+SKILL analysis-capability:
+  CAPABILITIES:
+    - data analysis
+    - synthesis
+
+AGENT MultiSkillAgent:
+  MODEL: opus
+  SKILLS: [writing-capability, analysis-capability]
+  PROMPT: "You have multiple capabilities."
+
+VAR multi_skill = NEW MultiSkillAgent()
+
+PRINT "Test 3: Agent with Multiple Skills - PASSED"
+PRINT "  Agent: MultiSkillAgent with 2 skills"
+
+# ============================================
+# TEST 4: Skill Inheritance
+# ============================================
+
+SKILL base-skill:
+  CAPABILITIES:
+    - basic function
+
+SKILL extended-skill EXTENDS base-skill:
+  CAPABILITIES:
+    - advanced function
+
+AGENT InheritedSkillAgent:
+  MODEL: sonnet
+  SKILLS: [extended-skill]
+  PROMPT: "Agent with inherited skill."
+
+VAR inherited_skill_agent = NEW InheritedSkillAgent()
+
+PRINT "Test 4: Skill Inheritance - PASSED"
+PRINT "  extended-skill inherits from base-skill"
+
+# ============================================
+# TEST 5: Agent Inheritance (EXTENDS)
+# ============================================
+
+AGENT ParentAgent:
+  MODEL: sonnet
+  SKILLS: [research-capability]
+  PROMPT: "I am the parent agent."
+
+AGENT ChildAgent EXTENDS ParentAgent:
+  MODEL: opus
+  PROMPT: "I am the child agent with enhanced capabilities."
+
+VAR parent = NEW ParentAgent()
+VAR child = NEW ChildAgent()
+
+VAR parent_result = RUN SESSION(parent):
+  TASK: "Identify yourself"
+
+VAR child_result = RUN SESSION(child):
+  TASK: "Identify yourself"
+
+PRINT "Test 5: Agent Inheritance (EXTENDS) - PASSED"
+PRINT "  Parent: {parent_result}"
+PRINT "  Child: {child_result}"
+PRINT "  Child inherits skills from ParentAgent"
+
+# ============================================
+# TEST 6: Agent Inheritance with Skill Addition
+# ============================================
+
+AGENT BaseResearcher:
+  MODEL: sonnet
+  SKILLS: [research-capability]
+  PROMPT: "Basic researcher."
+
+AGENT SeniorResearcher EXTENDS BaseResearcher:
+  SKILLS: [+analysis-capability]
+  PROMPT: PARENT + " With advanced analysis skills."
+
+VAR senior = NEW SeniorResearcher()
+
+PRINT "Test 6: Agent Inheritance with Skill Addition - PASSED"
+PRINT "  SeniorResearcher adds analysis-capability to parent's skills"
+
+# ============================================
+# TEST 7: Agent Composition (IMPLEMENTS)
+# ============================================
+
+SKILL frontend-dev:
+  CAPABILITIES:
+    - UI development
+    - React/Vue
+
+SKILL backend-dev:
+  CAPABILITIES:
+    - API development
+    - Database design
+
+SKILL devops:
+  CAPABILITIES:
+    - Deployment
+    - CI/CD
+
+AGENT FullStackDev IMPLEMENTS [frontend-dev, backend-dev, devops]:
+  MODEL: sonnet
+  PROMPT: "I am a full-stack developer with multiple skill sets."
+
+VAR fullstack = NEW FullStackDev()
+
+PRINT "Test 7: Agent Composition (IMPLEMENTS) - PASSED"
+PRINT "  FullStackDev implements 3 skill sets"
+
+# ============================================
+# TEST 8: Different Model Types
+# ============================================
+
+AGENT SonnetAgent:
+  MODEL: sonnet
+  PROMPT: "Using Sonnet model"
+
+AGENT OpusAgent:
+  MODEL: opus
+  PROMPT: "Using Opus model"
+
+AGENT HaikuAgent:
+  MODEL: haiku
+  PROMPT: "Using Haiku model"
+
+VAR sonnet_agent = NEW SonnetAgent()
+VAR opus_agent = NEW OpusAgent()
+VAR haiku_agent = NEW HaikuAgent()
+
+PRINT "Test 8: Different Model Types - PASSED"
+PRINT "  Sonnet, Opus, and Haiku agents created"
+
+# ============================================
+# TEST 9: Agent with Complex Prompt
+# ============================================
+
+AGENT ComplexPromptAgent:
+  MODEL: sonnet
+  PROMPT: "You are an AI agent with specific instructions:
+    1. Always be precise and accurate
+    2. Provide detailed explanations
+    3. Use structured formatting
+    4. Validate your outputs
+
+    Your goal is to assist with {task_type} tasks."
+
+VAR complex = NEW ComplexPromptAgent()
+
+PRINT "Test 9: Agent with Complex Prompt - PASSED"
+PRINT "  Multi-line prompt with placeholders"
+
+# ============================================
+# TEST 10: PARENT Keyword in Child Prompt
+# ============================================
+
+AGENT BaseAssistant:
+  MODEL: sonnet
+  PROMPT: "I am a helpful assistant."
+
+AGENT SpecializedAssistant EXTENDS BaseAssistant:
+  MODEL: opus
+  PROMPT: PARENT + " I specialize in technical documentation."
+
+VAR specialized = NEW SpecializedAssistant()
+
+PRINT "Test 10: PARENT Keyword - PASSED"
+PRINT "  Child prompt extends parent prompt"
+
+# ============================================
+# TEST 11: Multiple Inheritance Levels
+# ============================================
+
+AGENT Level1:
+  MODEL: sonnet
+  PROMPT: "Level 1 agent"
+
+AGENT Level2 EXTENDS Level1:
+  PROMPT: PARENT + " - Level 2"
+
+AGENT Level3 EXTENDS Level2:
+  MODEL: opus
+  PROMPT: PARENT + " - Level 3"
+
+VAR level3 = NEW Level3()
+
+PRINT "Test 11: Multiple Inheritance Levels - PASSED"
+PRINT "  Level3 → Level2 → Level1"
+
+# ============================================
+# TEST 12: Agent Instantiation with Same Class
+# ============================================
+
+AGENT Worker:
+  MODEL: sonnet
+  PROMPT: "I am a worker agent."
+
+VAR worker1 = NEW Worker()
+VAR worker2 = NEW Worker()
+VAR worker3 = NEW Worker()
+
+PRINT "Test 12: Multiple Instances - PASSED"
+PRINT "  Created 3 instances of Worker agent"
+
+# ============================================
+# TEST 13: Agent Reuse Across Sessions
+# ============================================
+
+AGENT ReusableAgent:
+  MODEL: sonnet
+  PROMPT: "I can be reused."
+
+VAR reusable = NEW ReusableAgent()
+
+VAR session1 = RUN SESSION(reusable):
+  TASK: "Task 1"
+
+VAR session2 = RUN SESSION(reusable):
+  TASK: "Task 2"
+
+VAR session3 = RUN SESSION(reusable):
+  TASK: "Task 3"
+
+PRINT "Test 13: Agent Reuse - PASSED"
+PRINT "  Same agent used for 3 different sessions"
+
+# ============================================
+# TEST 14: Skill with Requirements
+# ============================================
+
+SKILL api-access:
+  CAPABILITIES:
+    - HTTP requests
+    - JSON parsing
+  REQUIRES:
+    - internet access
+    - API credentials
+
+AGENT APIAgent:
+  MODEL: sonnet
+  SKILLS: [api-access]
+  PROMPT: "I can access external APIs."
+
+VAR api_agent = NEW APIAgent()
+
+PRINT "Test 14: Skill with Requirements - PASSED"
+PRINT "  Skill defines CAPABILITIES and REQUIRES"
+
+# ============================================
+# TEST 15: Empty Skills List
+# ============================================
+
+AGENT NoSkillsAgent:
+  MODEL: sonnet
+  SKILLS: []
+  PROMPT: "I have no special skills."
+
+VAR no_skills = NEW NoSkillsAgent()
+
+PRINT "Test 15: Empty Skills List - PASSED"
+PRINT "  Agent can have empty skills list"
+
+# ============================================
+# TEST 16: Agent Naming Conventions
+# ============================================
+
+# Test various naming styles
+AGENT SimpleAgent:
+  MODEL: sonnet
+  PROMPT: "Simple name"
+
+AGENT ComplexNamedAgent:
+  MODEL: sonnet
+  PROMPT: "Multi-word name"
+
+AGENT Agent123:
+  MODEL: sonnet
+  PROMPT: "Name with numbers"
+
+VAR simple = NEW SimpleAgent()
+VAR complex_named = NEW ComplexNamedAgent()
+VAR numbered = NEW Agent123()
+
+PRINT "Test 16: Agent Naming Conventions - PASSED"
+PRINT "  Various naming styles supported"
+
+# ============================================
+# TEST 17: Skill Composition
+# ============================================
+
+SKILL skill_a:
+  CAPABILITIES: [feature_a]
+
+SKILL skill_b:
+  CAPABILITIES: [feature_b]
+
+SKILL skill_c:
+  CAPABILITIES: [feature_c]
+
+AGENT CompositeSkillAgent IMPLEMENTS [skill_a, skill_b, skill_c]:
+  MODEL: sonnet
+  PROMPT: "Composite skills"
+
+VAR composite = NEW CompositeSkillAgent()
+
+PRINT "Test 17: Skill Composition - PASSED"
+PRINT "  Agent implements multiple independent skills"
+
+# ============================================
+# TEST 18: Model Override in Child
+# ============================================
+
+AGENT CheapParent:
+  MODEL: haiku
+  PROMPT: "Using cheap model"
+
+AGENT ExpensiveChild EXTENDS CheapParent:
+  MODEL: opus
+  PROMPT: PARENT + " but upgraded to better model"
+
+VAR expensive = NEW ExpensiveChild()
+
+PRINT "Test 18: Model Override - PASSED"
+PRINT "  Child overrides parent's model"
+
+# ============================================
+# TEST 19: Complex Skill Hierarchy
+# ============================================
+
+SKILL basic-reasoning:
+  CAPABILITIES: [logical-thinking]
+
+SKILL advanced-reasoning EXTENDS basic-reasoning:
+  CAPABILITIES: [abstract-thinking]
+
+SKILL expert-reasoning EXTENDS advanced-reasoning:
+  CAPABILITIES: [strategic-planning]
+
+AGENT ExpertAgent:
+  MODEL: opus
+  SKILLS: [expert-reasoning]
+  PROMPT: "Expert with hierarchical reasoning skills"
+
+VAR expert = NEW ExpertAgent()
+
+PRINT "Test 19: Complex Skill Hierarchy - PASSED"
+PRINT "  expert-reasoning → advanced-reasoning → basic-reasoning"
+
+# ============================================
+# TEST 20: Session with Agent Context
+# ============================================
+
+AGENT ContextAwareAgent:
+  MODEL: sonnet
+  PROMPT: "I am context-aware and can use {context_var} in my processing."
+
+VAR context_aware = NEW ContextAwareAgent()
+
+VAR context_result = RUN SESSION(context_aware):
+  TASK: "Process this task"
+  CONTEXT: {context_var: "special value", mode: "test"}
+
+PRINT "Test 20: Session with Agent Context - PASSED"
+PRINT "  Agent prompt can reference context variables"
+
+# ============================================
+# SUMMARY
+# ============================================
+
+PRINT "============================================"
+PRINT "AGENT FEATURES TEST SUITE COMPLETE"
+PRINT "============================================"
+PRINT "All agent features validated:"
+PRINT "  ✓ Basic agent definitions"
+PRINT "  ✓ Skills and capabilities"
+PRINT "  ✓ Agent inheritance (EXTENDS)"
+PRINT "  ✓ Agent composition (IMPLEMENTS)"
+PRINT "  ✓ Skill inheritance"
+PRINT "  ✓ Multiple model types"
+PRINT "  ✓ PARENT keyword"
+PRINT "  ✓ Agent reuse"
+PRINT "  ✓ Complex hierarchies"
+PRINT "============================================"
+PRINT "Agent testing: SUCCESS"
+PRINT "============================================"

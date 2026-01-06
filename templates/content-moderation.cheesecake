@@ -1,0 +1,82 @@
+# ============================================
+# CONTENT MODERATION WORKFLOW
+# ============================================
+# Review and moderate user-generated content
+# Demonstrates: conditionals, choice selection, error handling
+
+# ============================================
+# SECTION: Agent Definitions
+# ============================================
+
+AGENT Moderator:
+  MODEL: sonnet
+  PROMPT: "You are a content moderator who reviews content for policy violations, inappropriate material, and quality issues."
+
+AGENT PolicyExpert:
+  MODEL: sonnet
+  PROMPT: "You are an expert on content policies and can determine appropriate actions for policy violations."
+
+# ============================================
+# SECTION: Main Workflow
+# ============================================
+
+# Load content items to review
+VAR content_items = LOAD "content/to-review.json"
+
+VAR moderator = NEW Moderator()
+VAR policy_expert = NEW PolicyExpert()
+
+# Review each item
+FOR item IN content_items:
+  LOG "Reviewing content ID: {item.id}"
+
+  TRY:
+    # Moderate the content
+    VAR moderation = RUN SESSION(moderator):
+      TASK: "Review this content and identify any issues"
+      INPUT: {item}
+      RETRY: 2
+
+    # Determine action based on severity
+    CHOICE ON **severity level of issues found in {moderation}**:
+      OPTION "no-issues":
+        LOG "✓ Approved: {item.id}"
+        item.status = "approved"
+
+      OPTION "minor-issues":
+        LOG "⚠️  Flagged for review: {item.id}"
+        item.status = "flagged"
+        VAR suggestion = RUN SESSION(policy_expert):
+          TASK: "Suggest how to fix these minor issues"
+          INPUT: {moderation}
+        item.suggestion = suggestion
+
+      OPTION "major-issues":
+        LOG "❌ Rejected: {item.id}"
+        item.status = "rejected"
+        VAR reason = RUN SESSION(policy_expert):
+          TASK: "Explain why this content violates policies"
+          INPUT: {moderation}
+        item.rejection_reason = reason
+    END CHOICE
+
+  CATCH error:
+    LOG ERROR: "Failed to moderate {item.id}: {error.message}"
+    item.status = "error"
+    item.error = error.message
+  END TRY
+END FOR
+
+# Save results
+SAVE content_items TO "content/moderation-results.json"
+LOG SUCCESS: "Moderation complete!"
+
+# Print summary
+VAR approved = COUNT(content_items WHERE status = "approved")
+VAR flagged = COUNT(content_items WHERE status = "flagged")
+VAR rejected = COUNT(content_items WHERE status = "rejected")
+
+PRINT "✓ Moderation complete"
+PRINT "  Approved: {approved}"
+PRINT "  Flagged: {flagged}"
+PRINT "  Rejected: {rejected}"

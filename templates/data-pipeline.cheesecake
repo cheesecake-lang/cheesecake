@@ -1,0 +1,65 @@
+# ============================================
+# DATA PIPELINE
+# ============================================
+# Process data through multiple stages
+# Demonstrates: pipeline operations, parallel processing
+
+# ============================================
+# SECTION: Agent Definitions
+# ============================================
+
+AGENT DataCleaner:
+  MODEL: sonnet
+  PROMPT: "You clean and normalize data, removing duplicates and fixing formatting issues."
+
+AGENT DataAnalyzer:
+  MODEL: sonnet
+  PROMPT: "You analyze data to extract insights and patterns."
+
+AGENT ReportGenerator:
+  MODEL: opus
+  PROMPT: "You create clear, visual reports from data analysis."
+
+# ============================================
+# SECTION: Pipeline Stages
+# ============================================
+
+# Stage 1: Load data
+VAR raw_data = LOAD "data/input.json"
+LOG "Loaded {raw_data.LENGTH} records"
+
+# Stage 2: Clean data (parallel processing)
+VAR cleaner = NEW DataCleaner()
+
+PARALLEL FOR item IN raw_data:
+  VAR cleaned = RUN SESSION(cleaner):
+    TASK: "Clean and normalize this data record"
+    INPUT: {item}
+END PARALLEL FOR
+
+LOG "Cleaned {cleaned.LENGTH} records"
+
+# Stage 3: Analyze data
+VAR analyzer = NEW DataAnalyzer()
+VAR analysis = RUN SESSION(analyzer):
+  TASK: "Analyze this cleaned dataset and extract key insights"
+  INPUT: {cleaned}
+
+LOG "Analysis complete"
+
+# Stage 4: Generate report
+VAR reporter = NEW ReportGenerator()
+VAR report = RUN SESSION(reporter):
+  TASK: "Create a comprehensive report with visualizations"
+  INPUT: {analysis, cleaned}
+
+# Save outputs
+SAVE cleaned TO "data/cleaned.json"
+SAVE analysis TO "data/analysis.json"
+SAVE report TO "data/report.md"
+
+LOG SUCCESS: "Pipeline complete!"
+
+# Print summary
+PRINT "✓ Processed {raw_data.LENGTH} records"
+PRINT "✓ Outputs saved to data/ directory"

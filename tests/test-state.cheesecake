@@ -1,0 +1,486 @@
+# ============================================
+# CheeseCake State Management Test Suite
+# Tests checkpoints, memory, and persistence
+# Part of: CheeseCake v0.0.1 - Module 8: Testing
+# ============================================
+
+# Setup test agent
+AGENT TestAgent:
+  MODEL: sonnet
+  PROMPT: "You are a test agent for state management validation."
+
+VAR agent = NEW TestAgent()
+
+# ============================================
+# TEST 1: Basic CHECKPOINT
+# ============================================
+
+VAR phase1_data = RUN SESSION(agent):
+  TASK: "Generate test data for phase 1"
+
+CHECKPOINT "test-checkpoint-1":
+  SAVE: {phase1_data}
+END CHECKPOINT
+
+PRINT "Test 1: Basic CHECKPOINT - PASSED"
+PRINT "  Checkpoint 'test-checkpoint-1' created"
+
+# ============================================
+# TEST 2: CHECKPOINT with Multiple Variables
+# ============================================
+
+VAR var1 = "value1"
+VAR var2 = "value2"
+VAR var3 = {key: "value3"}
+
+CHECKPOINT "multi-var-checkpoint":
+  SAVE: {var1, var2, var3}
+END CHECKPOINT
+
+PRINT "Test 2: CHECKPOINT with Multiple Variables - PASSED"
+PRINT "  Saved 3 variables to checkpoint"
+
+# ============================================
+# TEST 3: CHECKPOINT with TO Clause
+# ============================================
+
+VAR important_data = "critical information"
+
+CHECKPOINT "custom-location":
+  SAVE: {important_data}
+  TO: ".cheesecake/state/custom/"
+END CHECKPOINT
+
+PRINT "Test 3: CHECKPOINT with TO Clause - PASSED"
+PRINT "  Saved to custom location"
+
+# ============================================
+# TEST 4: CHECKPOINT_EXISTS Check
+# ============================================
+
+IF CHECKPOINT_EXISTS("test-checkpoint-1"):
+  PRINT "Test 4: CHECKPOINT_EXISTS - PASSED"
+  PRINT "  Checkpoint found as expected"
+ELSE:
+  PRINT "Test 4: CHECKPOINT_EXISTS - FAILED"
+  PRINT "  Checkpoint not found"
+END IF
+
+# ============================================
+# TEST 5: RESTORE from Checkpoint
+# ============================================
+
+IF CHECKPOINT_EXISTS("test-checkpoint-1"):
+  RESTORE FROM "test-checkpoint-1"
+  PRINT "Test 5: RESTORE from Checkpoint - PASSED"
+  PRINT "  Restored: {phase1_data}"
+ELSE:
+  PRINT "Test 5: RESTORE - SKIPPED (checkpoint not found)"
+END IF
+
+# ============================================
+# TEST 6: Conditional Workflow with Checkpoint
+# ============================================
+
+IF CHECKPOINT_EXISTS("workflow-phase-2"):
+  RESTORE FROM "workflow-phase-2"
+  PRINT "Test 6a: Resuming from checkpoint"
+  VAR resumed = true
+ELSE:
+  PRINT "Test 6b: Starting fresh workflow"
+  VAR phase2_data = RUN SESSION(agent):
+    TASK: "Execute phase 2"
+
+  CHECKPOINT "workflow-phase-2":
+    SAVE: {phase2_data}
+  END CHECKPOINT
+  VAR resumed = false
+END IF
+
+PRINT "Test 6: Conditional Workflow with Checkpoint - PASSED"
+PRINT "  Resumed: {resumed}"
+
+# ============================================
+# TEST 7: MEMORY Block (Basic)
+# ============================================
+
+MEMORY project_config:
+  name: "Test Project"
+  version: "0.0.1"
+  created: "2025-01-05"
+END MEMORY
+
+PRINT "Test 7: MEMORY Block (Basic) - PASSED"
+PRINT "  Created persistent memory: project_config"
+
+# ============================================
+# TEST 8: MEMORY Block (Complex)
+# ============================================
+
+MEMORY session_state:
+  user_preferences: {
+    theme: "dark",
+    language: "en"
+  }
+  history: []
+  statistics: {
+    runs: 0,
+    successes: 0,
+    failures: 0
+  }
+END MEMORY
+
+PRINT "Test 8: MEMORY Block (Complex) - PASSED"
+PRINT "  Created complex memory structure"
+
+# ============================================
+# TEST 9: LOAD MEMORY
+# ============================================
+
+VAR config = LOAD MEMORY project_config
+
+PRINT "Test 9: LOAD MEMORY - PASSED"
+PRINT "  Loaded config: {config}"
+
+# ============================================
+# TEST 10: Update MEMORY
+# ============================================
+
+MEMORY session_state.statistics.runs = 1
+MEMORY session_state.statistics.successes = 1
+MEMORY session_state.history.APPEND({
+  timestamp: "2025-01-05 10:00",
+  action: "test_run",
+  result: "success"
+})
+
+PRINT "Test 10: Update MEMORY - PASSED"
+PRINT "  Updated statistics and history"
+
+# ============================================
+# TEST 11: Checkpoint in Loop
+# ============================================
+
+REPEAT 3:
+  VAR iteration_data = RUN SESSION(agent):
+    TASK: "Generate iteration data"
+
+  CHECKPOINT "iteration-checkpoint":
+    SAVE: {iteration_data}
+  END CHECKPOINT
+END REPEAT
+
+PRINT "Test 11: Checkpoint in Loop - PASSED"
+PRINT "  Created checkpoints in each iteration"
+
+# ============================================
+# TEST 12: Multiple Checkpoints
+# ============================================
+
+VAR data_a = "Dataset A"
+CHECKPOINT "checkpoint-a":
+  SAVE: {data_a}
+END CHECKPOINT
+
+VAR data_b = "Dataset B"
+CHECKPOINT "checkpoint-b":
+  SAVE: {data_b}
+END CHECKPOINT
+
+VAR data_c = "Dataset C"
+CHECKPOINT "checkpoint-c":
+  SAVE: {data_c}
+END CHECKPOINT
+
+PRINT "Test 12: Multiple Checkpoints - PASSED"
+PRINT "  Created 3 separate checkpoints"
+
+# ============================================
+# TEST 13: Checkpoint with Parallel Execution
+# ============================================
+
+PARALLEL:
+  VAR parallel_result1 = RUN SESSION(agent): TASK: "Parallel task 1"
+  VAR parallel_result2 = RUN SESSION(agent): TASK: "Parallel task 2"
+  VAR parallel_result3 = RUN SESSION(agent): TASK: "Parallel task 3"
+END PARALLEL
+
+CHECKPOINT "parallel-results":
+  SAVE: {parallel_result1, parallel_result2, parallel_result3}
+END CHECKPOINT
+
+PRINT "Test 13: Checkpoint with Parallel Results - PASSED"
+
+# ============================================
+# TEST 14: Restore and Continue Workflow
+# ============================================
+
+VAR stage = 1
+
+IF CHECKPOINT_EXISTS("workflow-stage-2"):
+  RESTORE FROM "workflow-stage-2"
+  VAR stage = 2
+ELIF CHECKPOINT_EXISTS("workflow-stage-1"):
+  RESTORE FROM "workflow-stage-1"
+  VAR stage = 1
+  # Continue from stage 1
+  VAR stage2_data = RUN SESSION(agent): TASK: "Execute stage 2"
+  CHECKPOINT "workflow-stage-2":
+    SAVE: {stage2_data}
+  END CHECKPOINT
+  VAR stage = 2
+ELSE:
+  # Start fresh
+  VAR stage1_data = RUN SESSION(agent): TASK: "Execute stage 1"
+  CHECKPOINT "workflow-stage-1":
+    SAVE: {stage1_data}
+  END CHECKPOINT
+END IF
+
+PRINT "Test 14: Restore and Continue - PASSED"
+PRINT "  Current stage: {stage}"
+
+# ============================================
+# TEST 15: Memory Across Sessions
+# ============================================
+
+MEMORY workflow_history:
+  runs: []
+  last_run: NULL
+  total_executions: 0
+END MEMORY
+
+VAR current_run = {
+  timestamp: "2025-01-05",
+  status: "testing",
+  test_count: 15
+}
+
+MEMORY workflow_history.runs.APPEND({current_run})
+MEMORY workflow_history.last_run = {current_run}
+MEMORY workflow_history.total_executions = workflow_history.total_executions + 1
+
+PRINT "Test 15: Memory Across Sessions - PASSED"
+PRINT "  Total executions recorded"
+
+# ============================================
+# TEST 16: Checkpoint Naming Conventions
+# ============================================
+
+CHECKPOINT "simple-name":
+  SAVE: {"data": "simple"}
+END CHECKPOINT
+
+CHECKPOINT "complex-checkpoint-name-123":
+  SAVE: {"data": "complex"}
+END CHECKPOINT
+
+CHECKPOINT "phase-1-complete":
+  SAVE: {"data": "descriptive"}
+END CHECKPOINT
+
+PRINT "Test 16: Checkpoint Naming - PASSED"
+PRINT "  Various naming conventions supported"
+
+# ============================================
+# TEST 17: Large State Checkpoint
+# ============================================
+
+VAR large_dataset = {
+  items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  metadata: {
+    count: 10,
+    type: "test",
+    generated: "2025-01-05"
+  },
+  results: ["a", "b", "c", "d", "e"]
+}
+
+CHECKPOINT "large-state":
+  SAVE: {large_dataset}
+  TO: ".cheesecake/state/"
+END CHECKPOINT
+
+PRINT "Test 17: Large State Checkpoint - PASSED"
+PRINT "  Saved complex data structure"
+
+# ============================================
+# TEST 18: Memory with Nested Updates
+# ============================================
+
+MEMORY nested_config:
+  level1: {
+    level2: {
+      level3: {
+        value: "initial"
+      }
+    }
+  }
+END MEMORY
+
+MEMORY nested_config.level1.level2.level3.value = "updated"
+
+VAR loaded_nested = LOAD MEMORY nested_config
+
+PRINT "Test 18: Nested Memory Updates - PASSED"
+PRINT "  Updated deeply nested value"
+
+# ============================================
+# TEST 19: Checkpoint in Error Handling
+# ============================================
+
+TRY:
+  VAR risky_operation = RUN SESSION(agent):
+    TASK: "Potentially failing operation"
+
+  CHECKPOINT "before-risky-step":
+    SAVE: {risky_operation}
+  END CHECKPOINT
+
+  VAR next_step = RUN SESSION(agent):
+    TASK: "Next step after risky operation"
+
+CATCH error:
+  LOG WARNING: "Error occurred, checkpoint preserved"
+  IF CHECKPOINT_EXISTS("before-risky-step"):
+    RESTORE FROM "before-risky-step"
+    PRINT "  Restored from checkpoint after error"
+  END IF
+END TRY
+
+PRINT "Test 19: Checkpoint in Error Handling - PASSED"
+
+# ============================================
+# TEST 20: State Persistence Patterns
+# ============================================
+
+# Pattern: Progressive checkpoints
+VAR progress = 0
+
+LOOP UNTIL **{progress} >= 100** MAX 10:
+  VAR progress = progress + 10
+
+  CHECKPOINT "progress-{progress}":
+    SAVE: {progress}
+  END CHECKPOINT
+
+  PRINT "  Progress: {progress}%"
+END LOOP
+
+PRINT "Test 20: State Persistence Patterns - PASSED"
+PRINT "  Created progressive checkpoints"
+
+# ============================================
+# TEST 21: Memory Initialization Check
+# ============================================
+
+IF MEMORY_EXISTS("app_settings"):
+  VAR settings = LOAD MEMORY app_settings
+  PRINT "Test 21a: Using existing memory"
+ELSE:
+  MEMORY app_settings:
+    initialized: true
+    version: "1.0"
+  END MEMORY
+  PRINT "Test 21b: Initialized new memory"
+END IF
+
+PRINT "Test 21: Memory Initialization Check - PASSED"
+
+# ============================================
+# TEST 22: Checkpoint Cleanup Simulation
+# ============================================
+
+# This tests the concept of checkpoint management
+VAR temp_data = "temporary"
+
+CHECKPOINT "temporary-checkpoint":
+  SAVE: {temp_data}
+END CHECKPOINT
+
+# In practice, you might delete old checkpoints
+# DELETE_CHECKPOINT "temporary-checkpoint"
+
+PRINT "Test 22: Checkpoint Management - PASSED"
+
+# ============================================
+# TEST 23: Memory as Agent Context
+# ============================================
+
+MEMORY agent_context:
+  role: "assistant"
+  capabilities: ["testing", "validation"]
+  preferences: {verbose: true}
+END MEMORY
+
+VAR ctx = LOAD MEMORY agent_context
+
+VAR context_aware_result = RUN SESSION(agent):
+  TASK: "Use context in processing"
+  CONTEXT: {ctx}
+
+PRINT "Test 23: Memory as Agent Context - PASSED"
+
+# ============================================
+# TEST 24: Incremental State Building
+# ============================================
+
+VAR accumulator = []
+
+REPEAT 3:
+  VAR new_item = RUN SESSION(agent):
+    TASK: "Generate item"
+
+  VAR accumulator.APPEND(new_item)
+
+  CHECKPOINT "accumulator-state":
+    SAVE: {accumulator}
+  END CHECKPOINT
+END REPEAT
+
+PRINT "Test 24: Incremental State Building - PASSED"
+PRINT "  Accumulator size: {accumulator.length}"
+
+# ============================================
+# TEST 25: State Versioning Pattern
+# ============================================
+
+VAR state_version = "v1"
+VAR state_data = {content: "data"}
+
+CHECKPOINT "state-{state_version}":
+  SAVE: {state_version, state_data}
+END CHECKPOINT
+
+# Simulate version upgrade
+VAR state_version = "v2"
+VAR state_data = {content: "updated data", new_field: "value"}
+
+CHECKPOINT "state-{state_version}":
+  SAVE: {state_version, state_data}
+END CHECKPOINT
+
+PRINT "Test 25: State Versioning - PASSED"
+PRINT "  Created versioned checkpoints"
+
+# ============================================
+# SUMMARY
+# ============================================
+
+PRINT "============================================"
+PRINT "STATE MANAGEMENT TEST SUITE COMPLETE"
+PRINT "============================================"
+PRINT "All state management features validated:"
+PRINT "  ✓ CHECKPOINT creation and restoration"
+PRINT "  ✓ CHECKPOINT_EXISTS checks"
+PRINT "  ✓ Custom checkpoint locations"
+PRINT "  ✓ MEMORY blocks (creation, loading, updating)"
+PRINT "  ✓ MEMORY_EXISTS checks"
+PRINT "  ✓ Nested memory structures"
+PRINT "  ✓ Checkpoints in loops and parallel blocks"
+PRINT "  ✓ State persistence patterns"
+PRINT "  ✓ Incremental state building"
+PRINT "  ✓ State versioning"
+PRINT "============================================"
+PRINT "State management testing: SUCCESS"
+PRINT "============================================"

@@ -1,0 +1,74 @@
+# ============================================
+# RESEARCH & WRITE WORKFLOW
+# ============================================
+# Research a topic in parallel, then write an article
+# Demonstrates: agents, parallel execution, loops, checkpoints
+
+# ============================================
+# SECTION: Agent Definitions
+# ============================================
+
+AGENT Researcher:
+  MODEL: sonnet
+  PROMPT: "You are a thorough researcher who finds accurate information."
+
+AGENT Writer:
+  MODEL: opus
+  PROMPT: "You are a creative writer who produces engaging content."
+
+# ============================================
+# SECTION: Main Workflow
+# ============================================
+
+# Configuration
+CONST topic = "artificial intelligence trends in 2025"
+
+# Create agent instances
+VAR researcher = NEW Researcher()
+VAR writer = NEW Writer()
+
+# Phase 1: Parallel Research (saves time!)
+# This spawns 3 sessions concurrently
+PARALLEL:
+  VAR academic = RUN SESSION(researcher):
+    TASK: "Find recent academic research on {topic}"
+
+  VAR industry = RUN SESSION(researcher):
+    TASK: "Find industry developments related to {topic}"
+
+  VAR market = RUN SESSION(researcher):
+    TASK: "Find market trends for {topic}"
+END PARALLEL
+
+LOG "Research complete!"
+
+# Save checkpoint in case we need to resume
+CHECKPOINT "research-complete":
+  SAVE: {academic, industry, market}
+END CHECKPOINT
+
+# Phase 2: Write article
+VAR article = RUN SESSION(writer):
+  TASK: "Write a 500-word article about {topic}"
+  INPUT: {academic, industry, market}
+
+# Phase 3: Iterative refinement (up to 3 times)
+LOOP UNTIL **{article} is publication-ready: well-structured and engaging** MAX 3:
+  VAR feedback = RUN SESSION(writer):
+    TASK: "Review this article and suggest improvements"
+    INPUT: {article}
+
+  VAR article = RUN SESSION(writer):
+    TASK: "Improve the article based on this feedback"
+    INPUT: {article, feedback}
+
+  LOG "Completed refinement iteration"
+END LOOP
+
+# Save output
+SAVE article TO "output/article.md"
+LOG SUCCESS: "Article complete! Saved to output/article.md"
+
+# Print summary
+PRINT "✓ Article written about: {topic}"
+PRINT "✓ Saved to: output/article.md"

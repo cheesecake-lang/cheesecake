@@ -1,0 +1,102 @@
+# CheeseCake .gitignore
+
+# ============================================
+# Runtime & State Files
+# ============================================
+
+# CheeseCake state directories (generated during workflow execution)
+.cheesecake/state/
+.cheesecake/memory/
+
+# Checkpoint files
+*.checkpoint
+
+# ============================================
+# Output Files
+# ============================================
+
+# Common output directories from workflows
+output/
+results/
+reports/
+data/processed/
+
+# ============================================
+# OS & Editor Files
+# ============================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================
+# Logs & Temporary Files
+# ============================================
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# ============================================
+# Dependencies & Build
+# ============================================
+
+# Node modules (if using JavaScript tooling in future)
+node_modules/
+
+# Python (if using Python tooling in future)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+
+# ============================================
+# Sensitive Files
+# ============================================
+
+# API keys and credentials
+.env
+.env.local
+.env.*.local
+secrets/
+credentials/
+*.key
+*.pem
+
+# ============================================
+# CheeseCake Specific
+# ============================================
+
+# Keep example .cheesecake files but ignore user-created ones in certain dirs
+# (Uncomment patterns as needed)
+# my-workflows/
+# experiments/
+
+# Keep templates directory
+!templates/**/*.cheesecake
+!examples/**/*.cheesecake

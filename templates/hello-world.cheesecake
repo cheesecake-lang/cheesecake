@@ -1,0 +1,24 @@
+# ============================================
+# HELLO WORLD - Simplest CheeseCake Example
+# ============================================
+# This is the simplest possible CheeseCake program.
+# It demonstrates:
+#   - Defining an agent
+#   - Creating an instance
+#   - Running a session
+#   - Printing output
+
+# Define an agent (like a class)
+AGENT Greeter:
+  MODEL: sonnet
+  PROMPT: "You are a friendly greeter who welcomes users warmly."
+
+# Create an instance of the agent
+VAR greeter = NEW Greeter()
+
+# Run a session with a task
+VAR message = RUN SESSION(greeter):
+  TASK: "Say hello to someone learning CheeseCake for the first time!"
+
+# Print the result
+PRINT message

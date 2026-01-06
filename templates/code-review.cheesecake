@@ -1,0 +1,62 @@
+# ============================================
+# CODE REVIEW WORKFLOW
+# ============================================
+# Review code changes and provide feedback
+# Demonstrates: loading files, conditionals, functions
+
+# ============================================
+# SECTION: Agent Definition
+# ============================================
+
+AGENT CodeReviewer:
+  MODEL: sonnet
+  PROMPT: "You are an experienced code reviewer who provides constructive feedback on code quality, security, and best practices."
+
+# ============================================
+# SECTION: Helper Function
+# ============================================
+
+FUNCTION review_file(filepath):
+  VAR code = LOAD filepath
+  VAR reviewer = NEW CodeReviewer()
+
+  VAR review = RUN SESSION(reviewer):
+    TASK: "Review this code for quality, security issues, and best practices"
+    INPUT: {code}
+
+  RETURN review
+END FUNCTION
+
+# ============================================
+# SECTION: Main Workflow
+# ============================================
+
+# Files to review (customize this list)
+VAR files_to_review = [
+  "src/main.js",
+  "src/utils.js",
+  "src/api.js"
+]
+
+# Review each file
+VAR all_reviews = []
+
+FOR file IN files_to_review:
+  LOG "Reviewing: {file}"
+  VAR review = CALL review_file(file)
+  MEMORY all_reviews.APPEND({file: file, review: review})
+END FOR
+
+# Generate summary report
+VAR reviewer = NEW CodeReviewer()
+VAR summary = RUN SESSION(reviewer):
+  TASK: "Create a summary report of all code reviews"
+  INPUT: {all_reviews}
+
+# Save report
+SAVE summary TO "code-review-report.md"
+LOG SUCCESS: "Code review complete!"
+
+# Print summary
+PRINT "✓ Reviewed {files_to_review.LENGTH} files"
+PRINT "✓ Report saved to: code-review-report.md"
