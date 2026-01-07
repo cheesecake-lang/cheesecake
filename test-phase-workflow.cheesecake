@@ -1,0 +1,100 @@
+# ============================================
+# Test Workflow with PHASE Blocks
+# Purpose: Test Module 9 progress tracking with phases
+# ============================================
+
+# Define agents for different phases
+AGENT Researcher:
+  MODEL: sonnet
+  PROMPT: "You are a research assistant who gathers information."
+
+AGENT Analyst:
+  MODEL: sonnet
+  PROMPT: "You are an analyst who synthesizes information."
+
+AGENT Writer:
+  MODEL: opus
+  PROMPT: "You are a writer who creates compelling content."
+
+# ============================================
+# PHASE 1: Data Collection
+# ============================================
+PHASE "Data Collection":
+  VAR researcher = NEW Researcher()
+
+  # Collect data from three sources in parallel
+  PARALLEL:
+    VAR source1 = RUN SESSION(researcher):
+      TASK: "Research recent developments in AI safety"
+
+    VAR source2 = RUN SESSION(researcher):
+      TASK: "Find industry perspectives on AI regulation"
+
+    VAR source3 = RUN SESSION(researcher):
+      TASK: "Gather academic viewpoints on AI ethics"
+  END PARALLEL
+
+  PRINT "✓ Data collection complete"
+
+  CHECKPOINT "data-collected":
+    SAVE: {source1, source2, source3}
+  END CHECKPOINT
+END PHASE
+
+# ============================================
+# PHASE 2: Analysis
+# ============================================
+PHASE "Analysis":
+  VAR analyst = NEW Analyst()
+
+  VAR analysis = RUN SESSION(analyst):
+    TASK: "Synthesize these research findings into key themes"
+    INPUT: {source1, source2, source3}
+
+  PRINT "✓ Analysis complete"
+
+  CHECKPOINT "analysis-done":
+    SAVE: {analysis}
+  END CHECKPOINT
+END PHASE
+
+# ============================================
+# PHASE 3: Content Creation
+# ============================================
+PHASE "Content Creation":
+  VAR writer = NEW Writer()
+
+  VAR draft = RUN SESSION(writer):
+    TASK: "Write a 500-word article based on this analysis"
+    INPUT: {analysis}
+
+  PRINT "✓ Draft created"
+
+  # Simple quality check (2 iterations max)
+  LOOP UNTIL **{draft} is well-structured and clear** MAX 2:
+    VAR feedback = RUN SESSION(writer):
+      TASK: "Review this draft and suggest one improvement"
+      INPUT: {draft}
+
+    VAR draft = RUN SESSION(writer):
+      TASK: "Apply this improvement to the draft"
+      INPUT: {draft, feedback}
+  END LOOP
+
+  CHECKPOINT "content-done":
+    SAVE: {draft}
+  END CHECKPOINT
+END PHASE
+
+# ============================================
+# PHASE 4: Finalization
+# ============================================
+PHASE "Finalization":
+  # Save final output
+  SAVE draft TO "output/ai-safety-article.md"
+
+  PRINT "============================================"
+  PRINT "✅ Workflow Complete!"
+  PRINT "============================================"
+  PRINT "Output saved to: output/ai-safety-article.md"
+END PHASE

@@ -1,6 +1,7 @@
 # CheeseCake Language Specification
 # Purpose: Complete language definition for AI agents to understand and execute .cheesecake files
 # Part of: CheeseCake v0.0.1 - Module 2 (Language Specification)
+# Updated: v0.0.2 - Added PHASE construct for progress tracking
 #
 # This file teaches AI agents the complete CheeseCake syntax and semantics.
 # When you read a .cheesecake file, use this specification to understand and execute it.
@@ -21,7 +22,7 @@ name: cheesecake
 description: CheeseCake language interpreter. Use when reading or executing .cheesecake files.
 ---
 
-# CheeseCake Language Specification v0.0.1
+# CheeseCake Language Specification v0.0.2
 
 ## Overview
 
@@ -443,6 +444,176 @@ CHOICE ON **project complexity level (simple, moderate, complex)**:
     VAR impl = RUN SESSION(senior_dev): TASK: "Implement" INPUT: {design}
 END CHOICE
 ```
+
+### Phase Blocks (v0.0.2+)
+
+**Purpose**: Organize workflow into logical phases for better progress tracking and visualization.
+
+```cheesecake
+PHASE "phase-name":
+  # Statements for this phase
+  # Can include any valid CheeseCake code
+END PHASE
+```
+
+**Key Points:**
+- **Optional**: Phases are purely organizational, not functional
+- **Sequential**: Phases execute one after another
+- **Progress tracking**: VM shows which phase is currently running
+- **Any code**: Can contain PARALLEL blocks, loops, conditions, etc.
+- **Unique names**: Phase names must be unique within a workflow
+- **Resumability**: Checkpoints between phases enable resume after failure
+
+**Example:**
+
+```cheesecake
+# Multi-phase research workflow
+# Phases provide clear progress visualization
+
+PHASE "Research":
+  # Research phase with parallel data gathering
+  VAR researcher = NEW Researcher()
+
+  PARALLEL:
+    VAR academic = RUN SESSION(researcher):
+      TASK: "Find academic papers on quantum computing"
+
+    VAR industry = RUN SESSION(researcher):
+      TASK: "Analyze industry developments"
+
+    VAR market = RUN SESSION(researcher):
+      TASK: "Evaluate market trends"
+  END PARALLEL
+
+  # Save checkpoint after research
+  CHECKPOINT "research-complete":
+    SAVE: {academic, industry, market}
+  END CHECKPOINT
+END PHASE
+
+PHASE "Analysis":
+  # Synthesis phase
+  VAR analyst = NEW Analyst()
+
+  VAR insights = RUN SESSION(analyst):
+    TASK: "Synthesize research findings into key insights"
+    INPUT: {academic, industry, market}
+
+  CHECKPOINT "analysis-complete":
+    SAVE: {insights}
+  END CHECKPOINT
+END PHASE
+
+PHASE "Writing":
+  # Iterative writing phase
+  VAR writer = NEW Writer()
+  VAR editor = NEW Editor()
+
+  VAR draft = RUN SESSION(writer):
+    TASK: "Write article based on insights"
+    INPUT: {insights}
+
+  # Iterative refinement
+  LOOP UNTIL **{draft} meets publication standards** MAX 5:
+    VAR feedback = RUN SESSION(editor):
+      TASK: "Review and provide feedback"
+      INPUT: {draft}
+
+    VAR draft = RUN SESSION(writer):
+      TASK: "Revise based on feedback"
+      INPUT: {draft, feedback}
+  END LOOP
+
+  CHECKPOINT "writing-complete":
+    SAVE: {draft}
+  END CHECKPOINT
+END PHASE
+
+PHASE "Output":
+  # Final output phase
+  SAVE draft TO "output/article.md"
+  LOG SUCCESS: "Article complete!"
+END PHASE
+```
+
+**Progress Visualization:**
+
+When executing a workflow with phases, the VM displays:
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║  Executing: research-workflow.cheesecake                  ║
+╚═══════════════════════════════════════════════════════════╝
+
+[■■■■■■□□□□] 60% complete
+
+✓ Phase 1: Research           [DONE]     8.5s
+✓ Phase 2: Analysis           [DONE]     4.2s
+→ Phase 3: Writing            [RUNNING]  2.1s
+○ Phase 4: Output             [PENDING]
+
+Tokens: 8,420 used | ~4,000 remaining
+Time: 14.8s elapsed | ~7s remaining
+```
+
+**When to Use PHASE Blocks:**
+
+1. **Long workflows** (>5 minutes execution time)
+2. **Multiple distinct stages** with different agents or tasks
+3. **When checkpoints are needed** between major stages
+4. **Complex workflows** where progress visibility helps user confidence
+5. **Debugging** - easier to identify which phase failed
+
+**When NOT to Use PHASE Blocks:**
+
+1. **Simple workflows** (1-3 operations)
+2. **Already clear structure** - don't over-organize
+3. **Single agent, single task** - unnecessary wrapper
+
+**Rules:**
+
+- Phase names must be **unique strings**
+- Phases execute **sequentially** (not parallel)
+- **Nested phases not allowed** (no PHASE inside PHASE)
+- **Works with all constructs** (can contain loops, conditionals, parallel blocks)
+- **No return values** - phases are organizational, not functional
+
+**Integration with Checkpoints:**
+
+Phases work well with checkpoints for resumability:
+
+```cheesecake
+PHASE "Expensive Research":
+  # If this phase fails, can resume without re-doing
+  VAR data = RUN SESSION(expensive_agent): TASK: "..."
+
+  CHECKPOINT "research-done":
+    SAVE: {data}
+  END CHECKPOINT
+END PHASE
+
+PHASE "Analysis":
+  # If we resume, we start here with loaded data
+  VAR result = RUN SESSION(analyst): TASK: "..." INPUT: {data}
+END PHASE
+```
+
+**Cost Estimation:**
+
+When using `/cheesecake estimate` or `--dry-run`, phases provide:
+- **Per-phase cost breakdown**
+- **Progress prediction** (which phase will take longest)
+- **Optimization suggestions** (identify expensive phases)
+
+Example output:
+```
+Phase 1: Research        $0.06  (12%)   8s
+Phase 2: Analysis        $0.04  (8%)    4s
+Phase 3: Writing         $0.35  (70%)   25s   ← Most expensive
+Phase 4: Output          $0.00  (0%)    0.5s
+```
+
+**Note**: Phases are **optional in v0.0.1**. They're added in v0.0.2 to enhance progress tracking, but existing workflows without phases continue to work perfectly.
 
 ---
 

@@ -1,0 +1,140 @@
+# ============================================
+# Customer Feedback Sentiment Analysis
+# Analyzes customer feedback and classifies as positive, negative, or neutral
+# ============================================
+
+# Define the sentiment analyzer agent
+AGENT SentimentAnalyzer:
+  MODEL: sonnet
+  PROMPT: "You are an expert sentiment analysis agent. You analyze customer feedback and accurately classify sentiment as positive, negative, or neutral. You understand nuances, context, and implicit sentiment."
+
+# Create analyzer instance
+VAR analyzer = NEW SentimentAnalyzer()
+
+# Sample customer feedback (replace with your actual data)
+VAR feedback_list = [
+  "The new feature is amazing! It solved all my problems.",
+  "I'm very disappointed with the recent update. It broke my workflow.",
+  "The interface is okay, nothing special but it works.",
+  "Absolutely love the customer support team! They're so helpful.",
+  "This is the worst experience I've ever had. Completely unusable.",
+  "It's decent, does what it's supposed to do.",
+  "The performance improvements are incredible! Much faster now.",
+  "I had some issues but support helped me quickly.",
+  "Not impressed. Expected more for the price.",
+  "Great product overall, keeps getting better with each update!"
+]
+
+# Initialize category counters
+VAR positive_count = 0
+VAR negative_count = 0
+VAR neutral_count = 0
+
+# Initialize categorized lists
+VAR positive_feedback = []
+VAR negative_feedback = []
+VAR neutral_feedback = []
+
+# Process each feedback item
+PRINT "============================================"
+PRINT "Analyzing Customer Feedback..."
+PRINT "============================================"
+PRINT ""
+
+FOR feedback, index IN feedback_list:
+  PRINT "Processing feedback #{index + 1}..."
+
+  # Analyze sentiment
+  VAR sentiment = RUN SESSION(analyzer):
+    TASK: "Analyze this customer feedback and classify it as ONLY one of: POSITIVE, NEGATIVE, or NEUTRAL. Respond with just the classification word.
+
+    Feedback: {feedback}"
+
+  # Categorize based on sentiment
+  IF **{sentiment} indicates positive sentiment**:
+    VAR positive_count = positive_count + 1
+    VAR positive_feedback = positive_feedback + [feedback]
+    PRINT "  → POSITIVE"
+  ELIF **{sentiment} indicates negative sentiment**:
+    VAR negative_count = negative_count + 1
+    VAR negative_feedback = negative_feedback + [feedback]
+    PRINT "  → NEGATIVE"
+  ELSE:
+    VAR neutral_count = neutral_count + 1
+    VAR neutral_feedback = neutral_feedback + [feedback]
+    PRINT "  → NEUTRAL"
+  END IF
+END FOR
+
+# Calculate total and percentages
+VAR total_feedback = feedback_list.length
+VAR positive_percent = (positive_count / total_feedback) * 100
+VAR negative_percent = (negative_count / total_feedback) * 100
+VAR neutral_percent = (neutral_count / total_feedback) * 100
+
+# Generate summary report
+PRINT ""
+PRINT "============================================"
+PRINT "SENTIMENT ANALYSIS SUMMARY"
+PRINT "============================================"
+PRINT ""
+PRINT "Total Feedback Analyzed: {total_feedback}"
+PRINT ""
+PRINT "📊 Sentiment Distribution:"
+PRINT "  ✅ Positive: {positive_count} ({positive_percent}%)"
+PRINT "  ❌ Negative: {negative_count} ({negative_percent}%)"
+PRINT "  ⚪ Neutral:  {neutral_count} ({neutral_percent}%)"
+PRINT ""
+
+# Show categorized feedback
+PRINT "============================================"
+PRINT "POSITIVE FEEDBACK"
+PRINT "============================================"
+FOR item IN positive_feedback:
+  PRINT "• {item}"
+END FOR
+
+PRINT ""
+PRINT "============================================"
+PRINT "NEGATIVE FEEDBACK"
+PRINT "============================================"
+FOR item IN negative_feedback:
+  PRINT "• {item}"
+END FOR
+
+PRINT ""
+PRINT "============================================"
+PRINT "NEUTRAL FEEDBACK"
+PRINT "============================================"
+FOR item IN neutral_feedback:
+  PRINT "• {item}"
+END FOR
+
+# Create detailed report object
+VAR report = {
+  total: total_feedback,
+  positive: {
+    count: positive_count,
+    percentage: positive_percent,
+    items: positive_feedback
+  },
+  negative: {
+    count: negative_count,
+    percentage: negative_percent,
+    items: negative_feedback
+  },
+  neutral: {
+    count: neutral_count,
+    percentage: neutral_percent,
+    items: neutral_feedback
+  }
+}
+
+# Save report to file
+SAVE report TO "output/feedback-analysis-report.json"
+
+PRINT ""
+PRINT "============================================"
+PRINT "✓ Analysis Complete!"
+PRINT "============================================"
+PRINT "Report saved to: output/feedback-analysis-report.json"

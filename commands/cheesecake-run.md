@@ -25,7 +25,7 @@ Execute a `.cheesecake` workflow file.
 ## Usage
 
 ```
-/cheesecake run <filename>
+/cheesecake run <filename> [--dry-run] [--verbose]
 ```
 
 or
@@ -34,6 +34,11 @@ or
 /cheesecake run
 ```
 (will prompt for file selection)
+
+### Flags
+
+- `--dry-run`: Simulate execution without spawning agents or incurring costs
+- `--verbose`: Show detailed progress and token tracking (v0.0.2+)
 
 ## Execution Protocol
 
@@ -191,12 +196,230 @@ Stack trace:
   Line 25: ... (failure point)
 ```
 
-## Special Flags (Future v0.0.2)
+## Dry-Run Mode (v0.0.2+)
 
-These will be implemented in future versions:
+### Overview
+
+Dry-run mode simulates workflow execution WITHOUT actually spawning agents or incurring costs.
+
+### Usage
 
 ```
-/cheesecake run --dry-run <file>    # Preview without executing
+/cheesecake run workflow.cheesecake --dry-run
+```
+
+### What Dry-Run Does
+
+1. **Parses the file** - Validates syntax
+2. **Simulates execution** - Walks through logic
+3. **Calculates costs** - Estimates tokens and expenses
+4. **Shows what WOULD happen** - Full preview
+5. **NO actual execution** - Zero cost, zero API calls
+
+### Dry-Run Execution Protocol
+
+When `--dry-run` flag is present:
+
+#### Step 1: Parse & Validate
+
+- Read the .cheesecake file
+- Validate syntax against SKILL.md
+- Check for undefined agents, invalid constructs
+- Report any syntax errors
+
+#### Step 2: Build Execution Plan
+
+- Identify all agents to be created
+- Count SESSION executions
+- Detect PARALLEL blocks
+- Estimate loop iterations (use MAX for LOOP UNTIL)
+- Map out phases if PHASE blocks exist
+
+#### Step 3: Simulate Execution
+
+Walk through each statement WITHOUT actual execution:
+
+```
+✓ Line 7: Define AGENT SentimentAnalyzer (Sonnet)
+✓ Line 12: Create instance 'analyzer'
+✓ Line 44: FOR loop start (10 iterations)
+  → Would spawn 10 Sonnet sessions
+  → Estimated: 8,000 tokens
+  → Est. cost: ~$0.06
+✓ Line 67: FOR loop end
+✓ Line 134: SAVE to output/report.json
+```
+
+#### Step 4: Calculate Costs
+
+Use cost-estimation.md formulas:
+- Count sessions by model type
+- Estimate tokens per session
+- Calculate total cost
+- Provide cost range (min/max)
+
+#### Step 5: Display Summary
+
+Show comprehensive dry-run report:
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║  DRY RUN: workflow.cheesecake                             ║
+╚═══════════════════════════════════════════════════════════╝
+
+Simulating execution (no actual sessions spawned)...
+
+[■■■■■■■■■■] 100% simulated
+
+📊 Analysis:
+  • 1 agent defined (SentimentAnalyzer - Sonnet)
+  • 10 total sessions (sequential)
+  • 1 FOR loop (10 iterations)
+  • 1 conditional block
+
+─────────────────────────────────────────────────────────────
+💰 COST ESTIMATE:
+
+Sessions:
+  • 10 Sonnet (sentiment analysis):   ~$0.06
+
+Total estimated: $0.06
+Range: $0.05 - $0.08
+
+Tokens: ~8,000
+Estimated time: ~15-20s
+
+─────────────────────────────────────────────────────────────
+📁 Output:
+  • Would save to: output/feedback-analysis-report.json
+
+─────────────────────────────────────────────────────────────
+✅ Dry run complete - no costs incurred
+
+Ready to run for real? Use:
+  /cheesecake run workflow.cheesecake
+
+Or estimate only:
+  /cheesecake estimate workflow.cheesecake
+─────────────────────────────────────────────────────────────
+```
+
+### Dry-Run with Phases
+
+If workflow has PHASE blocks, show phase-by-phase:
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║  DRY RUN: research-workflow.cheesecake                    ║
+╚═══════════════════════════════════════════════════════════╝
+
+○ Phase 1: Research
+  • Would create Researcher agent (Sonnet)
+  • Would spawn 3 parallel sessions
+  • Estimated: 7,500 tokens, ~$0.06, ~8s
+
+○ Phase 2: Analysis
+  • Would create Analyst agent (Sonnet)
+  • Would run 1 analysis session
+  • Estimated: 2,500 tokens, ~$0.02, ~3s
+
+○ Phase 3: Writing
+  • Would create Writer agent (Opus)
+  • Would run 1 writing session
+  • Would enter loop (max 5, est. 3 iterations)
+  • Estimated: 15,000 tokens, ~$0.45, ~20s
+
+○ Phase 4: Output
+  • Would save to output/article.md
+  • No cost (file I/O only), ~0.1s
+
+─────────────────────────────────────────────────────────────
+💰 TOTAL ESTIMATE:
+
+Cost: $0.53 (range: $0.35 - $0.85)
+Tokens: ~25,000
+Time: ~31-45s
+
+Cost breakdown:
+  Research:   $0.06  (11%)
+  Analysis:   $0.02  (4%)
+  Writing:    $0.45  (85%)  ← Most expensive
+
+─────────────────────────────────────────────────────────────
+💡 Optimization suggestions:
+  • Writing phase uses Opus (expensive)
+  • Consider Sonnet for drafts, Opus for final polish
+  • Potential savings: ~$0.30 (67%)
+
+─────────────────────────────────────────────────────────────
+Proceed with actual run? [Y/n]
+```
+
+### Dry-Run Implementation Notes
+
+**For the executing agent:**
+
+1. **Parse mode** - Use SKILL.md to validate syntax
+2. **Simulation mode** - Don't spawn actual Task agents
+3. **Cost calculation** - Use cost-estimation.md formulas
+4. **Progress tracking** - Use progress.md display formats
+5. **No side effects** - No file writes, no API calls, no state changes
+
+**Key differences from normal execution:**
+
+| Normal Run | Dry Run |
+|------------|---------|
+| Spawn Task agents | Simulate without spawning |
+| Execute AI sessions | Estimate tokens/cost |
+| Write files | Show "would write to..." |
+| Update checkpoints | Show "would save checkpoint..." |
+| Actual time varies | Instant simulation |
+| Costs money | Zero cost |
+
+### Verbose Mode (v0.0.2+)
+
+Combine with `--verbose` for maximum detail:
+
+```
+/cheesecake run workflow.cheesecake --dry-run --verbose
+```
+
+Shows:
+- Every statement execution
+- Detailed token breakdown
+- Model selection reasoning
+- Full cost calculations
+- Optimization opportunities
+
+### Error Detection in Dry-Run
+
+Dry-run catches errors WITHOUT cost:
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║  DRY RUN FAILED                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+❌ Syntax Error at line 48
+
+  46: FOR feedback IN feedback_list:
+  47:   VAR sentiment = RUN SESSION(analyzer): TASK: "..."
+> 48:   IF {sentiment} is positive:
+  49:     VAR positive_count = positive_count + 1
+
+Error: Missing ** markers for semantic condition
+
+Should be: IF **{sentiment} is positive**:
+
+Fix this error and try again.
+
+─────────────────────────────────────────────────────────────
+✓ Dry run caught error before incurring any costs!
+```
+
+### Future Flags (v0.0.3+)
+
+```
 /cheesecake run --debug <file>      # Show detailed execution trace
 /cheesecake run --resume <file>     # Resume from checkpoint
 ```
