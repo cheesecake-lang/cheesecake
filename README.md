@@ -21,12 +21,27 @@ CheeseCake is a programming language designed for orchestrating AI agents. It tr
 
 ### Installation (Claude Code)
 
-```bash
-# Clone or download the plugin
-git clone https://github.com/cheesecake-lang/cheesecake
+**Option 1: Install from Claude Code Plugin Marketplace** (Recommended)
 
-# Install as Claude Code plugin
-/plugin install cheesecake/
+```bash
+# Install CheeseCake from the official plugin marketplace
+# (In Claude Code CLI)
+/plugin install cheesecake@claude-plugins-official
+
+# Verify installation
+/cheesecake
+```
+
+**Option 2: Install from Source** (For development)
+
+```bash
+# Clone the repository
+git clone https://github.com/cheesecake-lang/cheesecake.git
+cd cheesecake
+
+# Install as Claude Code plugin from local directory
+# (In Claude Code CLI, from within the cheesecake directory)
+/plugin install ./
 
 # Verify installation
 /cheesecake
