@@ -755,7 +755,407 @@ When implementing INTERACTIVE execution:
 
 ---
 
-## 9. Error Handling
+## 9. Cost Management & Budget Tracking (v0.0.2+)
+
+### Overview
+
+Module 11 adds comprehensive cost management to CheeseCake workflows. The VM is responsible for:
+- Tracking real-time costs during execution
+- Checking operations against budget limits
+- Displaying cost warnings to users
+- Enforcing budget constraints
+- Providing optimization suggestions
+
+### CONFIG Block Parsing
+
+When the VM encounters a CONFIG block:
+
+```cheesecake
+CONFIG:
+  BUDGET: $1.00
+  CONFIRM_COST_ABOVE: $0.10
+  WARN_PARALLEL_ABOVE: 5
+END CONFIG
+```
+
+**VM Actions**:
+1. Parse CONFIG block (must be at start of file)
+2. Validate all settings (dollar amounts, numbers, booleans)
+3. Store configuration in execution context
+4. Initialize cost tracking state:
+   - `current_cost = $0.00`
+   - `budget = CONFIG.BUDGET`
+   - `warning_thresholds = {CONFIRM_COST_ABOVE, WARN_PARALLEL_ABOVE, etc.}`
+5. Apply settings globally to workflow execution
+
+**Default Values** (if CONFIG not present or setting omitted):
+```javascript
+{
+  BUDGET: null,  // No limit
+  CONFIRM_COST_ABOVE: null,  // No confirmations
+  WARN_PARALLEL_ABOVE: null,  // No warnings
+  WARN_AT_PERCENT: 90,
+  OPTIMIZATION_SUGGESTIONS: true,
+  DEFAULT_MODEL: "sonnet",
+  MAX_PARALLEL_SESSIONS: null,  // Unlimited
+  TIMEOUT_DEFAULT: "120s",
+  STOP_ON_BUDGET_EXCEED: true,
+  INTERACTIVE_WARNINGS: true
+}
+```
+
+### Cost Tracking Protocol
+
+**For every session execution**:
+
+1. **Before session starts**:
+   ```
+   a) Estimate cost based on:
+      - Model type (sonnet: ~$0.03, opus: ~$0.15, haiku: ~$0.001)
+      - Task complexity (simple vs complex)
+      - Context size
+      - Estimated output length
+
+   b) Check budget:
+      - If current_cost + estimated_cost > CONFIG.BUDGET:
+        → Trigger budget exceeded warning/error
+
+   c) Check confirmation threshold:
+      - If estimated_cost > CONFIG.CONFIRM_COST_ABOVE:
+        → Show operation cost warning, wait for user input
+   ```
+
+2. **During session execution**:
+   ```
+   - Show estimated cost in progress display
+   - Update progress with "(estimating...)" indicator
+   ```
+
+3. **After session completes**:
+   ```
+   a) Calculate actual cost:
+      - actual_cost = (input_tokens × input_price) + (output_tokens × output_price)
+
+   b) Update running total:
+      - current_cost += actual_cost
+
+   c) Update progress display with actual cost
+
+   d) Check budget threshold:
+      - If (current_cost / CONFIG.BUDGET) >= (CONFIG.WARN_AT_PERCENT / 100):
+        → Show budget threshold warning (once)
+
+   e) Log variance:
+      - variance = actual_cost - estimated_cost
+      - If |variance| > 20%: note for estimation improvement
+   ```
+
+### Cost Estimation Formulas
+
+Use these formulas from Module 9 (cost-estimation.md):
+
+**Base cost per model** (simple task, ~1000 tokens total):
+- Sonnet: $0.003
+- Opus: $0.015
+- Haiku: $0.001
+
+**Complexity multipliers**:
+- Simple task: 1x
+- Moderate task: 2x
+- Complex task: 4x
+
+**Context multipliers**:
+- Small context (<1000 tokens): 1x
+- Medium context (1000-5000 tokens): 1.5x
+- Large context (>5000 tokens): 2.5x
+
+**Formula**:
+```
+estimated_cost = base_cost × complexity_multiplier × context_multiplier × 1.2 (buffer)
+```
+
+### Budget Check Points
+
+The VM checks budget at these points:
+
+1. **Before each RUN SESSION**:
+   - Check: `current_cost + estimated_session_cost <= CONFIG.BUDGET`
+   - If fail: Trigger budget exceeded
+
+2. **Before PARALLEL block**:
+   - Check: `current_cost + sum(estimated_costs) <= CONFIG.BUDGET`
+   - Count sessions: If count > CONFIG.WARN_PARALLEL_ABOVE, warn
+   - If budget fail: Trigger budget exceeded
+
+3. **Before each LOOP iteration**:
+   - Check: `current_cost + estimated_iteration_cost <= CONFIG.BUDGET`
+   - If fail: Trigger budget exceeded, exit loop early
+
+4. **At CONFIG.WARN_AT_PERCENT threshold**:
+   - Once current_cost crosses percentage, show threshold warning
+   - Example: If WARN_AT_PERCENT: 80 and BUDGET: $1.00, warn at $0.80
+
+### Warning Display Protocol
+
+#### Operation Cost Warning
+
+**Trigger**: `estimated_cost > CONFIG.CONFIRM_COST_ABOVE`
+
+**Display Format**:
+```
+⚠️  COST WARNING
+This operation estimated at: ~${estimated_cost}
+Model: {model_name}
+Task: "{task_preview...}"
+Current budget: ${current_cost} / ${CONFIG.BUDGET} ({percentage}%)
+After operation: ~${current_cost + estimated_cost} / ${CONFIG.BUDGET} ({new_percentage}%)
+
+Continue? [Y/n/e]
+  Y - Continue with operation
+  n - Skip operation (variable = NULL)
+  e - Edit task to reduce cost
+```
+
+**VM Actions**:
+- If `CONFIG.INTERACTIVE_WARNINGS: false`: Auto-continue, log warning only
+- If `CONFIG.INTERACTIVE_WARNINGS: true`: Wait for user input
+- On 'Y': Continue normally
+- On 'n': Skip operation, set variable to NULL, continue workflow
+- On 'e': Prompt user to modify task, re-estimate, show updated warning
+
+#### Parallel Session Warning
+
+**Trigger**: `session_count > CONFIG.WARN_PARALLEL_ABOVE`
+
+**Display Format**:
+```
+⚠️  PARALLEL SESSION WARNING
+About to spawn {count} parallel sessions
+Model: {model} (x{count})
+Estimated total cost: ~${total_estimated_cost}
+Current budget: ${current_cost} / ${CONFIG.BUDGET} ({percentage}%)
+After operation: ~${current_cost + total_estimated_cost} / ${CONFIG.BUDGET} ({new_percentage}%)
+
+Session breakdown:
+  • Session 1: {task_preview} (~${cost1})
+  • Session 2: {task_preview} (~${cost2})
+  • ... ({remaining} more)
+
+Continue? [Y/n/r]
+  Y - Spawn all {count} sessions
+  n - Skip entire PARALLEL block
+  r - Reduce (enter max count)
+```
+
+**VM Actions**:
+- On 'Y': Continue with all sessions
+- On 'n': Skip PARALLEL block, all variables in block = NULL
+- On 'r': Prompt for max count (e.g., "5"), spawn only first N sessions
+
+#### Budget Threshold Warning
+
+**Trigger**: `current_cost >= (CONFIG.BUDGET × CONFIG.WARN_AT_PERCENT / 100)`
+
+**Display Format**:
+```
+⚠️  BUDGET THRESHOLD WARNING
+Current cost: ${current_cost} / ${CONFIG.BUDGET} ({percentage}% of budget used)
+Estimated remaining operations: ~${estimated_remaining}
+You may exceed budget soon.
+
+Continue? [Y/n]
+```
+
+**VM Actions**:
+- Show warning once when threshold crossed
+- If 'n': Stop workflow gracefully
+- If 'Y': Continue, don't show this warning again
+
+#### Budget Exceeded Error
+
+**Trigger**: `current_cost + estimated_cost > CONFIG.BUDGET` (when `STOP_ON_BUDGET_EXCEED: true`)
+
+**Display Format**:
+```
+❌ BUDGET EXCEEDED
+Current cost: ${current_cost}
+Next operation estimated: ~${estimated_cost}
+Total would be: ${current_cost + estimated_cost} (exceeds ${CONFIG.BUDGET} budget)
+
+Operation: {operation_type} at line {line_number}
+Task: "{task_preview...}"
+
+Workflow stopped to prevent budget overrun.
+
+Options:
+1. Increase budget: Edit CONFIG: BUDGET: ${suggested_budget}
+2. Use cheaper model: Switch {current_model} → {cheaper_model} (saves ~{savings})
+3. Skip operation: Comment out or remove this task
+4. Add checkpoint: Resume from here after budget adjustment
+
+Run with --estimate to see full cost breakdown.
+```
+
+**VM Actions** (STOP_ON_BUDGET_EXCEED: true):
+- Stop workflow immediately
+- Do not execute operation
+- Exit with error code 1
+- Log final cost summary
+
+**VM Actions** (STOP_ON_BUDGET_EXCEED: false):
+- Show warning
+- Allow workflow to continue
+- Log overage
+- Continue tracking (cost can exceed budget)
+
+### Progress Display Integration
+
+Cost information must appear in progress display:
+
+**Format**:
+```
+┌─────────────────────────────────────────────────────┐
+│  Running: workflow.cheesecake                       │
+│                                                     │
+│  [■■■■■■□□□□] 60% complete                         │
+│                                                     │
+│  ✓ Phase 1: Research          [DONE]    2.3s       │
+│  → Phase 2: Analysis          [RUNNING] (est. $0.15)│
+│  ○ Phase 3: Writing           [PENDING]            │
+│                                                     │
+│  Tokens: 12,450 used | ~8,000 remaining            │
+│  Cost: $0.12 / $2.00 budget (6% used) ✓           │
+└─────────────────────────────────────────────────────┘
+```
+
+**Cost Display Indicators**:
+- ✓ (Green): Within budget, <75% used
+- ⚠ (Yellow): Approaching budget, 75-100% used
+- ❌ (Red): Budget exceeded, >100%
+
+**Update frequency**:
+- Update after each session completes
+- Show "(estimating...)" during session execution
+- Update percentage in real-time
+
+### Optimization Suggestions
+
+**When to generate suggestions**:
+1. After workflow completes successfully
+2. When budget threshold warning triggered
+3. During dry-run mode
+
+**Types of suggestions**:
+
+1. **Model Downgrade**:
+```
+💡 OPTIMIZATION #1: Model Downgrade
+Location: Line {line_number}
+Current: {current_model} for task "{task}"
+Cost: ~${cost} per iteration ({iterations} iterations) = ~${total}
+
+Suggestion: Switch to {cheaper_model}
+Potential savings: ~${savings} ({percentage}% reduction)
+Quality impact: {impact_level}
+```
+
+2. **Parallelize Sequential Operations**:
+```
+💡 OPTIMIZATION #2: Parallelize
+Location: Lines {start}-{end}
+Current: Sequential execution ({count} tasks)
+Time: ~{time} seconds
+
+Suggestion: Use PARALLEL block
+Potential savings: ~{time_saved} seconds ({percentage}% faster)
+```
+
+3. **Add Checkpoints**:
+```
+💡 OPTIMIZATION #3: Add Checkpoint
+Location: After line {line_number}
+Risk: If workflow fails, ${cost} of work is lost
+
+Suggestion: Add CHECKPOINT "{name}"
+Benefit: Resume from checkpoint, avoid re-running expensive operations
+```
+
+4. **Batch Instead of Loop**:
+```
+💡 OPTIMIZATION #4: Batch Processing
+Location: Line {line_number}
+Current: Loop with {iterations} iterations (~${cost})
+
+Suggestion: Batch all items in single session
+Potential savings: ~${savings} ({percentage}% reduction)
+```
+
+**Display Format** (at end of execution):
+```
+============================================
+OPTIMIZATION SUGGESTIONS
+============================================
+
+You have {count} potential optimizations:
+
+💡 #1: Model Downgrade (Line {line})
+   Potential savings: ~${savings} ({percentage}%)
+
+💡 #2: Parallelize (Lines {start}-{end})
+   Potential time savings: ~{time} seconds
+
+Total potential savings: ~${total_savings}
+
+View details: /cheesecake explain {file} --suggestions
+Apply suggestions: /cheesecake optimize {file}
+============================================
+```
+
+### VM Implementation Checklist
+
+For cost management to work, the VM must:
+
+- [ ] Parse CONFIG block at start of execution
+- [ ] Validate all CONFIG settings
+- [ ] Initialize cost tracking state
+- [ ] Estimate cost before each operation
+- [ ] Check budget before each operation
+- [ ] Track actual cost after each operation
+- [ ] Update progress display with cost info
+- [ ] Show warnings at appropriate thresholds
+- [ ] Enforce budget limit (if STOP_ON_BUDGET_EXCEED: true)
+- [ ] Generate optimization suggestions
+- [ ] Display final cost summary
+- [ ] Handle CONFIG.INTERACTIVE_WARNINGS: false mode
+- [ ] Integrate with dry-run mode (zero actual cost)
+- [ ] Persist cost data with checkpoints
+- [ ] Calculate accurate cost based on token usage
+
+### Integration with Other Features
+
+**With Module 9 (Estimation)**:
+- Use estimation formulas for cost prediction
+- Dry-run shows estimated costs without tracking actual
+- Estimate command shows costs without executing
+
+**With Module 10 (Interactive Mode)**:
+- Cost warnings can trigger INTERACTIVE pauses
+- User can approve/deny expensive operations
+- Zero cost during INTERACTIVE pause
+
+**With Progress Tracking**:
+- Cost displayed in progress visualization
+- Phase-by-phase cost breakdown
+- Real-time cost updates
+
+**With Checkpoints**:
+- Cost data saved with checkpoint
+- Resume restores cost state
+- Prevents re-counting costs after resume
+
+---
+
+## 10. Error Handling
 
 ### Try/Catch
 
@@ -805,7 +1205,7 @@ VAR data = RUN SESSION(agent):
 
 ---
 
-## 10. Context Passing
+## 11. Context Passing
 
 ### Between Sessions
 
@@ -832,7 +1232,7 @@ VAR article = RUN SESSION(writer):
 
 ---
 
-## 11. Function Calls
+## 12. Function Calls
 
 ### Execution
 
@@ -858,7 +1258,7 @@ VAR output = CALL research_topic(topic: "quantum computing")
 
 ---
 
-## 12. Import/Export
+## 13. Import/Export
 
 ### Import
 
@@ -876,7 +1276,7 @@ VAR agent = NEW lib.Researcher()
 
 ---
 
-## 13. Progress Reporting
+## 14. Progress Reporting
 
 ### Reporting Format
 
@@ -905,7 +1305,7 @@ During execution, report progress to user:
 
 ---
 
-## 14. Special Behaviors
+## 15. Special Behaviors
 
 ### Semantic Inference
 
@@ -928,7 +1328,7 @@ When passing multiple variables as INPUT, intelligently format them for readabil
 
 ---
 
-## 15. Error Messages
+## 16. Error Messages
 
 Provide clear, actionable error messages:
 
@@ -950,7 +1350,7 @@ Error: undefined variable
 
 ---
 
-## 16. Complete Execution Example
+## 17. Complete Execution Example
 
 ### Input File: `workflow.cheesecake`
 

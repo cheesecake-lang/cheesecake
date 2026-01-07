@@ -302,10 +302,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+#### Module 11: Cost Management ✅ COMPLETE
+
+**CONFIG Block**
+- Global workflow configuration with cost management settings
+- Syntax: `CONFIG: ... END CONFIG` (optional, at start of file)
+- 11 configuration settings across 4 categories:
+  - Cost Management: BUDGET, CONFIRM_COST_ABOVE, WARN_PARALLEL_ABOVE, WARN_AT_PERCENT, OPTIMIZATION_SUGGESTIONS
+  - Model Settings: DEFAULT_MODEL
+  - Execution Settings: MAX_PARALLEL_SESSIONS, TIMEOUT_DEFAULT
+  - Behavior Settings: STOP_ON_BUDGET_EXCEED, INTERACTIVE_WARNINGS
+- Must appear at start of file, only one per workflow
+- All settings optional with sensible defaults
+
+**Cost Tracking**
+- Real-time cost tracking during workflow execution
+- Track cost of each session based on model and token usage
+- Accumulate running total throughout workflow
+- Display cost in progress visualization
+- Model pricing (2025 rates):
+  - Sonnet 4.5: $3/$15 per million tokens
+  - Opus 4.5: $15/$75 per million tokens
+  - Haiku 3.5: $0.80/$4 per million tokens
+
+**Warning System**
+- Four types of cost warnings:
+  1. Operation Cost Warning: Single operation exceeds threshold
+  2. Parallel Session Warning: Many parallel sessions about to spawn
+  3. Budget Threshold Warning: Budget usage reaches percentage
+  4. Budget Exceeded Error: Budget limit exceeded
+- Interactive warnings pause for user input
+- Non-interactive mode logs warnings and auto-continues
+- User options: Continue (Y), Skip (n), Edit task (e), Reduce count (r)
+
+**Budget Enforcement**
+- Hard budget limit: Stops workflow when budget exceeded
+- Soft budget: Warns but continues execution
+- Budget checks at key points:
+  - Before each RUN SESSION
+  - Before PARALLEL blocks
+  - Before each LOOP iteration
+  - At percentage thresholds
+- Configurable via STOP_ON_BUDGET_EXCEED setting
+
+**Optimization Suggestions**
+- AI-powered suggestions for cost reduction
+- Six types of suggestions:
+  1. Model downgrade (Opus → Sonnet)
+  2. Parallelize sequential operations
+  3. Add checkpoints to prevent re-runs
+  4. Batch instead of loop
+  5. Cache repeated operations
+  6. Use CHOICE ON to skip unnecessary branches
+- Shown after workflow completion
+- Displays potential savings and quality impact
+- Can be disabled via OPTIMIZATION_SUGGESTIONS: false
+
+**Progress Integration**
+- Cost displayed in progress visualization:
+  ```
+  Cost: $0.12 / $1.00 budget (12% used) ✓
+  ```
+- Three indicators:
+  - ✓ Within budget (<75%)
+  - ⚠ Approaching budget (75-100%)
+  - ❌ Budget exceeded (>100%)
+- Real-time updates after each session
+- Estimated cost shown during execution
+
+**Documentation**
+- `skills/cheesecake/cost-management.md` - 1,050+ lines of specification
+- `skills/cheesecake/SKILL.md` - Added CONFIG block (section 11, 280+ lines)
+- `skills/cheesecake/vm.md` - Added cost tracking semantics (section 9, 400+ lines)
+- `test-cost-management.cheesecake` - 330 lines testing all features
+- Total new documentation: 2,060+ lines
+
+**Examples**
+- Basic budget control
+- Production configuration (conservative)
+- Development configuration (permissive)
+- Parallel session warning
+- Budget exceeded scenario
+- Multi-phase with optimization
+
+### Testing (Module 11)
+- Tested CONFIG block parsing ✅
+- Tested cost tracking simulation ✅
+- Tested warning triggers ✅
+- Tested budget enforcement logic ✅
+- Tested optimization suggestion generation ✅
+- Validated progress integration ✅
+- Validated 15 comprehensive test scenarios ✅
+
+### Changed (Module 11)
+- `SKILL.md` sections renumbered (12-18, was 11-17)
+- `vm.md` sections renumbered (10-17, was 9-16)
+- Added CONFIG block as section 11 in SKILL.md
+- Added Cost Management as section 9 in vm.md
+
+### Backward Compatibility (Module 11)
+- ✅ All v0.0.1 and v0.0.2 workflows continue to work
+- CONFIG block is completely optional
+- Default: no budget limit, no warnings, no restrictions
+- Existing workflows without CONFIG run normally
+- No breaking changes to syntax
+
+---
+
 ## [Unreleased] - Planned for future v0.0.2 modules
 
-### Planned Features (Modules 11-14)
-- Module 11: Cost management with CONFIG block and budget enforcement
+### Planned Features (Modules 12-14)
 - Module 12: Event handlers and scheduling (ON EVENT, SCHEDULE)
 - Module 13: Enhanced testing features (TEST SUITE, MOCK, ASSERT)
 - Module 14: Execution history and replay

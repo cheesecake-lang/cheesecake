@@ -1,7 +1,7 @@
 # CheeseCake Language Specification
 # Purpose: Complete language definition for AI agents to understand and execute .cheesecake files
 # Part of: CheeseCake v0.0.1 - Module 2 (Language Specification)
-# Updated: v0.0.2 - Added PHASE construct for progress tracking
+# Updated: v0.0.2 - Added PHASE construct (Module 9), INTERACTIVE construct (Module 10), CONFIG block (Module 11)
 #
 # This file teaches AI agents the complete CheeseCake syntax and semantics.
 # When you read a .cheesecake file, use this specification to understand and execute it.
@@ -1066,7 +1066,290 @@ MEMORY project_state.history.APPEND({
 
 ---
 
-## 11. Error Handling
+## 11. Configuration (CONFIG Block) - v0.0.2+
+
+### Overview
+
+The CONFIG block allows global configuration of workflow execution, including cost management, model defaults, and execution settings.
+
+**Added in**: v0.0.2 (Module 11: Cost Management)
+
+### Syntax
+
+```cheesecake
+CONFIG:
+  # Cost Management
+  BUDGET: <dollar_amount>
+  CONFIRM_COST_ABOVE: <dollar_amount>
+  WARN_PARALLEL_ABOVE: <number>
+  WARN_AT_PERCENT: <percentage>
+  OPTIMIZATION_SUGGESTIONS: <true|false>
+
+  # Model Settings
+  DEFAULT_MODEL: <sonnet|opus|haiku>
+
+  # Execution Settings
+  MAX_PARALLEL_SESSIONS: <number>
+  TIMEOUT_DEFAULT: <time>
+
+  # Behavior Settings
+  STOP_ON_BUDGET_EXCEED: <true|false>
+  INTERACTIVE_WARNINGS: <true|false>
+END CONFIG
+```
+
+### Core Settings
+
+#### Cost Management Settings
+
+**BUDGET** (optional)
+- Maximum total cost for workflow execution
+- Example: `BUDGET: $1.00`
+- Default: No limit
+- When exceeded (and STOP_ON_BUDGET_EXCEED: true), workflow stops
+
+**CONFIRM_COST_ABOVE** (optional)
+- Ask user before operations exceeding this cost
+- Example: `CONFIRM_COST_ABOVE: $0.10`
+- Default: No confirmations
+- Shows warning with cost estimate, waits for Y/n
+
+**WARN_PARALLEL_ABOVE** (optional)
+- Warn when PARALLEL block spawns N+ sessions
+- Example: `WARN_PARALLEL_ABOVE: 5`
+- Default: No warnings
+- Shows session count and cost estimate
+
+**WARN_AT_PERCENT** (optional)
+- Warn when budget usage reaches percentage
+- Example: `WARN_AT_PERCENT: 80`
+- Default: 90
+- Warning shown once when threshold crossed
+
+**OPTIMIZATION_SUGGESTIONS** (optional)
+- Enable/disable AI-powered optimization suggestions
+- Example: `OPTIMIZATION_SUGGESTIONS: true`
+- Default: true
+- Shows suggestions for cost reduction after execution
+
+#### Model Settings
+
+**DEFAULT_MODEL** (optional)
+- Default model when agent doesn't specify MODEL property
+- Example: `DEFAULT_MODEL: sonnet`
+- Default: sonnet
+- Values: `sonnet`, `opus`, `haiku`
+
+#### Execution Settings
+
+**MAX_PARALLEL_SESSIONS** (optional)
+- Hard limit on concurrent sessions
+- Example: `MAX_PARALLEL_SESSIONS: 10`
+- Default: Unlimited
+- PARALLEL blocks limited to this count
+
+**TIMEOUT_DEFAULT** (optional)
+- Default timeout for sessions without explicit TIMEOUT
+- Example: `TIMEOUT_DEFAULT: 60s`
+- Default: 120s (2 minutes)
+- Can be overridden per-session
+
+#### Behavior Settings
+
+**STOP_ON_BUDGET_EXCEED** (optional)
+- Whether to stop workflow when budget exceeded
+- Example: `STOP_ON_BUDGET_EXCEED: false`
+- Default: true
+- If false, warns but continues execution
+
+**INTERACTIVE_WARNINGS** (optional)
+- Whether warnings require user input
+- Example: `INTERACTIVE_WARNINGS: false`
+- Default: true
+- If false, warnings logged but auto-continue
+
+### Rules
+
+1. **Location**: CONFIG block must appear at start of file (before any code)
+2. **Uniqueness**: Only one CONFIG block allowed per workflow
+3. **Scope**: Settings apply to entire workflow execution
+4. **Optional**: CONFIG block is completely optional
+5. **Defaults**: All settings have sensible defaults
+6. **Override**: Individual sessions can override TIMEOUT
+
+### Examples
+
+#### Basic Budget Control
+
+```cheesecake
+CONFIG:
+  BUDGET: $1.00
+  CONFIRM_COST_ABOVE: $0.10
+END CONFIG
+
+AGENT Researcher:
+  MODEL: opus
+  PROMPT: "..."
+
+VAR researcher = NEW Researcher()
+
+# Triggers warning (~$0.15 > $0.10)
+VAR result = RUN SESSION(researcher):
+  TASK: "Comprehensive research"
+```
+
+#### Production Configuration
+
+```cheesecake
+CONFIG:
+  # Conservative settings for production
+  BUDGET: $0.50
+  CONFIRM_COST_ABOVE: $0.05
+  WARN_PARALLEL_ABOVE: 3
+  DEFAULT_MODEL: sonnet
+  MAX_PARALLEL_SESSIONS: 5
+  STOP_ON_BUDGET_EXCEED: true
+  OPTIMIZATION_SUGGESTIONS: true
+END CONFIG
+```
+
+#### Development Configuration
+
+```cheesecake
+CONFIG:
+  # Permissive settings for development
+  BUDGET: $5.00
+  CONFIRM_COST_ABOVE: $0.50
+  DEFAULT_MODEL: opus
+  STOP_ON_BUDGET_EXCEED: false
+  INTERACTIVE_WARNINGS: false
+END CONFIG
+```
+
+### Cost Tracking
+
+When CONFIG includes cost settings:
+
+1. **Real-time tracking**: VM tracks cost of each session
+2. **Budget checks**: Before each operation, checks if budget allows
+3. **Warnings**: Shows warnings based on thresholds
+4. **Progress display**: Shows cost in progress visualization
+
+```
+Progress: [■■■■■■□□□□] 60% complete
+Cost: $0.12 / $1.00 budget (12% used) ✓
+```
+
+### Warning Types
+
+**Operation Cost Warning**:
+```
+⚠️  COST WARNING
+This operation estimated at: ~$0.15
+Model: opus
+Current budget: $0.05 / $1.00 (5%)
+After operation: ~$0.20 / $1.00 (20%)
+Continue? [Y/n]
+```
+
+**Parallel Session Warning**:
+```
+⚠️  PARALLEL SESSION WARNING
+About to spawn 10 parallel sessions
+Estimated cost: ~$0.30
+Current: $0.10 / $1.00 (10%)
+Continue? [Y/n/r]
+```
+
+**Budget Exceeded Error**:
+```
+❌ BUDGET EXCEEDED
+Current cost: $0.95
+Next operation: ~$0.15
+Total would be: $1.10 (exceeds $1.00 budget)
+Workflow stopped at line 45
+```
+
+### Optimization Suggestions
+
+When `OPTIMIZATION_SUGGESTIONS: true`, VM provides suggestions:
+
+```
+============================================
+OPTIMIZATION SUGGESTIONS
+============================================
+
+💡 #1: Model Downgrade (Line 23)
+   Current: Opus for simple task (~$0.15)
+   Suggestion: Switch to Sonnet (~$0.03)
+   Savings: ~$0.12 (80% reduction)
+
+💡 #2: Parallelize (Lines 30-35)
+   Potential time savings: ~67% faster
+
+Total potential savings: ~$0.12
+============================================
+```
+
+### Integration
+
+CONFIG integrates with:
+- **Module 9 (Progress & Estimation)**: Uses cost estimates, shows in progress
+- **Module 10 (Interactive Mode)**: Cost warnings can pause workflow
+- **State Management**: Budget tracking persists across checkpoints
+
+### Best Practices
+
+1. **Start with dry-run**: Test with `--dry-run` before setting budget
+2. **Set realistic budgets**: Add 50% buffer to estimates
+3. **Use confirmation thresholds**: Catch expensive operations early
+4. **Match model to task**: Use Sonnet for simple, Opus for complex
+5. **Review suggestions**: Apply optimizations to reduce costs
+
+### Complete Example
+
+```cheesecake
+# ============================================
+# Research Workflow with Cost Management
+# ============================================
+
+CONFIG:
+  BUDGET: $2.00
+  CONFIRM_COST_ABOVE: $0.20
+  WARN_PARALLEL_ABOVE: 5
+  WARN_AT_PERCENT: 75
+  DEFAULT_MODEL: sonnet
+  OPTIMIZATION_SUGGESTIONS: true
+END CONFIG
+
+AGENT Researcher:
+  MODEL: sonnet  # Cost-effective for research
+  PROMPT: "You are a thorough researcher."
+
+AGENT Analyst:
+  MODEL: opus  # High-quality analysis
+  PROMPT: "You are a deep analyst."
+
+# Research phase (~$0.09 total)
+VAR researcher = NEW Researcher()
+PARALLEL:
+  VAR r1 = RUN SESSION(researcher): TASK: "Research aspect A"
+  VAR r2 = RUN SESSION(researcher): TASK: "Research aspect B"
+  VAR r3 = RUN SESSION(researcher): TASK: "Research aspect C"
+END PARALLEL
+
+# Analysis phase (~$0.30, triggers warning)
+VAR analyst = NEW Analyst()
+VAR analysis = RUN SESSION(analyst):
+  TASK: "Deep analysis"
+  INPUT: {r1, r2, r3}
+
+PRINT "Total cost: {CURRENT_COST} / {CONFIG.BUDGET}"
+```
+
+---
+
+## 12. Error Handling
 
 ### Try/Catch/Finally
 
@@ -1119,7 +1402,7 @@ END TRY
 
 ---
 
-## 12. Functions
+## 13. Functions
 
 Functions are reusable workflows with parameters and return values.
 
@@ -1171,7 +1454,7 @@ END FUNCTION
 
 ---
 
-## 13. Modules & Imports
+## 14. Modules & Imports
 
 ### Import Syntax
 
@@ -1220,7 +1503,7 @@ VAR article = RUN SESSION(writer): TASK: "Write article" INPUT: {findings}
 
 ---
 
-## 14. Built-in Functions & Commands
+## 15. Built-in Functions & Commands
 
 ### Logging
 
@@ -1265,7 +1548,7 @@ DELETE file                      # Delete file
 
 ---
 
-## 15. Operators & Comparisons
+## 16. Operators & Comparisons
 
 ### Assignment
 
@@ -1294,7 +1577,7 @@ IF **NOT {failed}**:
 
 ---
 
-## 16. Best Practices
+## 17. Best Practices
 
 ### 1. Use Descriptive Names
 
@@ -1355,7 +1638,7 @@ END FOR
 
 ---
 
-## 17. Complete Example
+## 18. Complete Example
 
 Here's a comprehensive example using many CheeseCake features:
 
