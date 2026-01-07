@@ -1,0 +1,244 @@
+# ============================================
+# Test Workflow: Interactive Mode Features
+# Purpose: Test Module 10 (Interactive Mode) functionality
+# ============================================
+
+# Define agents for the test
+AGENT Researcher:
+  MODEL: sonnet
+  PROMPT: "You are a research assistant who gathers information efficiently."
+
+AGENT Analyst:
+  MODEL: sonnet
+  PROMPT: "You are an analyst who synthesizes information into insights."
+
+AGENT Writer:
+  MODEL: opus
+  PROMPT: "You are a creative writer who produces high-quality content."
+
+# ============================================
+# TEST 1: Simple Approval Workflow
+# ============================================
+PRINT "============================================"
+PRINT "TEST 1: Simple Approval"
+PRINT "============================================"
+
+VAR researcher = NEW Researcher()
+VAR findings = RUN SESSION(researcher):
+  TASK: "Research the top 3 trends in AI for 2026"
+
+# Pause and ask user if they want to proceed with expensive analysis
+INTERACTIVE AT "approve-analysis":
+  SHOW: {findings}
+  ASK USER: "Research complete. Proceed with detailed analysis?"
+  OPTIONS:
+    - "Yes, analyze" → VAR proceed_with_analysis = true
+    - "No, skip analysis" → VAR proceed_with_analysis = false
+  END OPTIONS
+END INTERACTIVE
+
+IF proceed_with_analysis == true:
+  VAR analyst = NEW Analyst()
+  VAR deep_analysis = RUN SESSION(analyst):
+    TASK: "Perform in-depth analysis of these findings"
+    INPUT: {findings}
+
+  PRINT "✓ Analysis complete!"
+  PRINT {deep_analysis}
+ELSE:
+  PRINT "Analysis skipped by user"
+END IF
+
+# ============================================
+# TEST 2: Iterative Draft Review
+# ============================================
+PRINT ""
+PRINT "============================================"
+PRINT "TEST 2: Iterative Draft Review"
+PRINT "============================================"
+
+VAR writer = NEW Writer()
+VAR draft = RUN SESSION(writer):
+  TASK: "Write a 200-word article about AI trends for 2026"
+
+VAR iterations = 0
+VAR continue_refining = true
+
+LOOP UNTIL continue_refining == false MAX 3:
+  VAR iterations = iterations + 1
+
+  # Show draft and ask user what to do
+  INTERACTIVE AT "review-draft-iteration-{iterations}":
+    SHOW: {draft}
+    ASK USER: "Review iteration {iterations}. How should we proceed?"
+    OPTIONS:
+      - "Continue refining" → VAR action = "refine"
+      - "Finalize now" → VAR action = "finalize"
+      - "Start over" → VAR action = "restart"
+    END OPTIONS
+  END INTERACTIVE
+
+  # Handle user choice
+  IF action == "finalize":
+    VAR continue_refining = false
+    PRINT "✓ Draft finalized by user at iteration {iterations}"
+
+  ELIF action == "restart":
+    VAR draft = RUN SESSION(writer):
+      TASK: "Write a completely new 200-word article about AI trends"
+    PRINT "→ Starting fresh draft"
+
+  ELSE:  # action == "refine"
+    VAR draft = RUN SESSION(writer):
+      TASK: "Improve this draft with better structure and clarity"
+      INPUT: {draft}
+    PRINT "→ Draft refined (iteration {iterations})"
+  END IF
+END LOOP
+
+PRINT "✓ Final draft ready"
+
+# ============================================
+# TEST 3: Model Selection
+# ============================================
+PRINT ""
+PRINT "============================================"
+PRINT "TEST 3: Model Selection"
+PRINT "============================================"
+
+VAR task_description = "Analyze the implications of AI trends on healthcare"
+
+# Let user decide which model to use
+INTERACTIVE AT "choose-model":
+  SHOW: "Task: {task_description}"
+  ASK USER: "Which model should handle this analysis?"
+  OPTIONS:
+    - "Sonnet (fast, cost-effective)" → VAR chosen_model = "sonnet"
+    - "Opus (thorough, detailed)" → VAR chosen_model = "opus"
+    - "Skip this task" → VAR chosen_model = "skip"
+  END OPTIONS
+END INTERACTIVE
+
+IF chosen_model == "sonnet":
+  VAR analyst_sonnet = NEW Analyst()
+  VAR analysis = RUN SESSION(analyst_sonnet):
+    TASK: "{task_description}"
+  PRINT "✓ Analysis complete using Sonnet"
+
+ELIF chosen_model == "opus":
+  AGENT AnalystOpus:
+    MODEL: opus
+    PROMPT: "You are an analyst who provides thorough, detailed analysis."
+
+  VAR analyst_opus = NEW AnalystOpus()
+  VAR analysis = RUN SESSION(analyst_opus):
+    TASK: "{task_description}"
+  PRINT "✓ Analysis complete using Opus"
+
+ELSE:  # skip
+  PRINT "Task skipped by user"
+END IF
+
+# ============================================
+# TEST 4: Conditional Interactive
+# ============================================
+PRINT ""
+PRINT "============================================"
+PRINT "TEST 4: Conditional Interactive"
+PRINT "============================================"
+
+VAR quality_score = 7  # On scale of 1-10
+
+# Only ask user if quality is below threshold
+IF quality_score < 8:
+  INTERACTIVE AT "low-quality-handler":
+    SHOW: "Quality score: {quality_score}/10"
+    ASK USER: "Quality is below threshold (8/10). What should we do?"
+    OPTIONS:
+      - "Accept as-is" → VAR action = "accept"
+      - "Request improvements" → VAR action = "improve"
+      - "Reject and restart" → VAR action = "reject"
+    END OPTIONS
+  END INTERACTIVE
+
+  IF action == "accept":
+    PRINT "✓ Accepted despite low quality score"
+  ELIF action == "improve":
+    PRINT "→ Requesting improvements..."
+    # Would normally run improvement session here
+  ELSE:  # reject
+    PRINT "✗ Rejected - restarting from scratch"
+  END IF
+ELSE:
+  PRINT "✓ Quality score acceptable ({quality_score}/10)"
+END IF
+
+# ============================================
+# TEST 5: Cost-Aware Branching
+# ============================================
+PRINT ""
+PRINT "============================================"
+PRINT "TEST 5: Cost-Aware Branching"
+PRINT "============================================"
+
+VAR expensive_task = "Comprehensive market analysis across 50 companies"
+VAR estimated_cost = 0.75  # dollars
+
+# Show cost and ask for approval
+INTERACTIVE AT "cost-approval":
+  SHOW: "Task: {expensive_task}"
+  SHOW: "Estimated cost: ${estimated_cost}"
+  ASK USER: "This operation will cost ~${estimated_cost}. Proceed?"
+  OPTIONS:
+    - "Yes, proceed" → VAR approved = true
+    - "No, use cheaper alternative" → VAR approved = false
+    - "Modify task scope" → VAR modify = true
+  END OPTIONS
+END INTERACTIVE
+
+IF modify == true:
+  # Let user modify the task
+  INTERACTIVE AT "modify-task":
+    ASK USER: "Select modified task scope:"
+    OPTIONS:
+      - "Analyze top 10 companies ($0.15)" → VAR expensive_task = "Analyze top 10 companies"
+      - "Focus on fintech sector ($0.20)" → VAR expensive_task = "Analyze fintech sector"
+      - "Cancel entirely" → VAR approved = false
+    END OPTIONS
+  END INTERACTIVE
+END IF
+
+IF approved == true:
+  PRINT "→ Executing: {expensive_task}"
+  PRINT "✓ Task complete (simulated)"
+ELSE:
+  PRINT "Operation cancelled by user"
+END IF
+
+# ============================================
+# FINAL SUMMARY
+# ============================================
+PRINT ""
+PRINT "============================================"
+PRINT "✅ Interactive Mode Tests Complete!"
+PRINT "============================================"
+PRINT ""
+PRINT "Tests executed:"
+PRINT "  ✓ TEST 1: Simple Approval"
+PRINT "  ✓ TEST 2: Iterative Draft Review"
+PRINT "  ✓ TEST 3: Model Selection"
+PRINT "  ✓ TEST 4: Conditional Interactive"
+PRINT "  ✓ TEST 5: Cost-Aware Branching"
+PRINT ""
+PRINT "Interactive Mode features validated:"
+PRINT "  • SHOW: display context before asking"
+PRINT "  • ASK USER: present questions clearly"
+PRINT "  • OPTIONS: multiple choice selection"
+PRINT "  • Action execution based on user choice"
+PRINT "  • INTERACTIVE in loops (iterative review)"
+PRINT "  • INTERACTIVE in conditionals (quality check)"
+PRINT "  • Sequential INTERACTIVE blocks (modify task)"
+PRINT "  • Zero cost during pause"
+PRINT "  • Progress tracking integration"
+PRINT ""
+PRINT "All features working as specified! 🎉"

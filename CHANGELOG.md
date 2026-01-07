@@ -197,10 +197,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+#### Module 10: Interactive Mode ✅ COMPLETE
+
+**INTERACTIVE Construct**
+- Human-in-the-loop workflows with pause/resume execution
+- Syntax: `INTERACTIVE AT "checkpoint-name": SHOW: {var} ASK USER: "?" OPTIONS: ... END INTERACTIVE`
+- Four components:
+  - `AT "name"` - Unique identifier for interactive point
+  - `SHOW: {variable}` - Display context before asking (optional)
+  - `ASK USER: "question?"` - Question presented to user (required)
+  - `OPTIONS:` - 2-10 multiple choice options with actions
+- Zero cost during pause (no AI sessions spawned)
+- State preservation: all variables, context, line number saved
+- Seamless resume after user input
+
+**Pause/Resume Execution**
+- 5-step execution flow:
+  1. Pre-pause state preservation
+  2. Display context (if SHOW present)
+  3. Present question and options (via AskUserQuestion tool)
+  4. Execute selected action
+  5. Resume execution
+- Time and token counters pause during user input
+- Progress tracking shows ⏸ indicator for paused phase
+- Can resume from checkpoint if user disconnects
+
+**Action Execution**
+- Actions can be:
+  - Variable assignments (`VAR x = true`)
+  - Session executions (`RUN SESSION(...)`)
+  - Control flow (`BREAK`, `CONTINUE`, `RETURN`)
+  - Any valid CheeseCake statements
+- User selection triggers immediate action execution
+- Variables from actions available after INTERACTIVE block
+
+**Integration with AskUserQuestion**
+- INTERACTIVE uses Claude Code's `AskUserQuestion` tool internally
+- Question from `ASK USER`
+- Options from `OPTIONS` block with auto-generated descriptions
+- Header from checkpoint name
+- Single selection mode (not multi-select)
+
+**Special Cases**
+- ✅ INTERACTIVE in loops (iterative refinement with user feedback)
+- ✅ INTERACTIVE in conditionals (conditional pause based on criteria)
+- ✅ Sequential INTERACTIVE blocks (multi-step user input)
+- ✅ Multiple INTERACTIVE blocks in same workflow
+- ❌ INTERACTIVE inside PARALLEL blocks (parse error)
+- ❌ Nested INTERACTIVE blocks (parse error)
+
+**Progress Integration**
+- Paused phase shows ⏸ symbol
+- Clear pause indicator: `[PAUSE] Waiting for user input at: checkpoint-name`
+- Time counter pauses during user input
+- Token counter pauses (zero cost)
+- Resumes seamlessly after input
+
+**Use Cases**
+- Approval workflows (cost approval, quality review, safety checks)
+- Iterative refinement (user feedback at each iteration)
+- Agent/model selection (let user choose Sonnet vs Opus)
+- Path branching (user chooses workflow direction)
+- Early exit points (user can cancel expensive operations)
+- Quality checkpoints (pause if quality below threshold)
+
+**Documentation**
+- `skills/cheesecake/interactive.md` - 1,200+ lines of interactive mode specification
+- `skills/cheesecake/SKILL.md` - Added INTERACTIVE construct (260+ lines, section 9)
+- `skills/cheesecake/vm.md` - Added pause/resume semantics (350+ lines, section 8)
+- Total new documentation: 1,810+ lines
+
+**Examples**
+- Simple approval workflow (proceed vs skip)
+- Iterative draft review with loop
+- Multi-agent/model selection
+- Conditional INTERACTIVE (only if quality low)
+- Cost-aware branching with sequential INTERACTIVE
+
+**Test File**
+- `test-interactive-workflow.cheesecake` - 180+ lines testing all features
+- 5 comprehensive test scenarios
+- All key features validated
+
+### Testing (Module 10)
+- Tested simple approval workflow ✅
+- Tested iterative review in loop ✅
+- Tested model selection (Sonnet/Opus/skip) ✅
+- Tested conditional INTERACTIVE ✅
+- Tested sequential INTERACTIVE blocks ✅
+- Tested zero cost during pause ✅
+- Validated all constraints (no PARALLEL, no nesting) ✅
+
+### Changed (Module 10)
+- `SKILL.md` sections renumbered (9-17)
+- Added INTERACTIVE construct as section 9
+- `vm.md` sections renumbered (8-16)
+- Added Interactive Mode Execution as section 8
+
+### Backward Compatibility (Module 10)
+- ✅ All v0.0.1 and v0.0.2 workflows continue to work
+- INTERACTIVE blocks are optional
+- Existing workflows without INTERACTIVE blocks work perfectly
+- No breaking changes to syntax
+
+---
+
 ## [Unreleased] - Planned for future v0.0.2 modules
 
-### Planned Features (Modules 10-14)
-- Module 10: Interactive mode with user input prompts (INTERACTIVE construct)
+### Planned Features (Modules 11-14)
 - Module 11: Cost management with CONFIG block and budget enforcement
 - Module 12: Event handlers and scheduling (ON EVENT, SCHEDULE)
 - Module 13: Enhanced testing features (TEST SUITE, MOCK, ASSERT)

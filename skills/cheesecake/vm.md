@@ -1,6 +1,7 @@
 # CheeseCake VM Execution Semantics
 # Purpose: Define how AI agents execute .cheesecake programs
 # Part of: CheeseCake v0.0.1 - Module 3 (VM Execution Engine)
+# Updated: v0.0.2 - Added INTERACTIVE pause/resume execution semantics
 #
 # This file explains the runtime behavior of the CheeseCake VM.
 # You (the AI) ARE the VM when executing .cheesecake files.
@@ -404,7 +405,357 @@ END LOOP
 
 ---
 
-## 8. Error Handling
+## 8. Interactive Mode Execution (v0.0.2+)
+
+### Overview
+
+INTERACTIVE blocks pause workflow execution to request user input. The VM must:
+1. **Save state** before pausing
+2. **Present context** to the user
+3. **Wait for user input** using AskUserQuestion tool
+4. **Execute selected action**
+5. **Resume execution** seamlessly
+
+### Execution Flow
+
+```cheesecake
+INTERACTIVE AT "checkpoint-name":
+  SHOW: {variable}
+  ASK USER: "Question?"
+  OPTIONS:
+    - "option1" → action1
+    - "option2" → action2
+  END OPTIONS
+END INTERACTIVE
+```
+
+**VM Behavior**:
+
+#### Step 1: Pre-Pause State Preservation
+
+Before pausing, save current state:
+```javascript
+interactive_state = {
+  checkpoint_name: "checkpoint-name",
+  line_number: current_line,
+  variables: deep_copy(all_variables),
+  context: execution_context,
+  timestamp: NOW()
+}
+```
+
+#### Step 2: Display Context (if SHOW present)
+
+If SHOW clause exists:
+1. Evaluate the expression: `result = evaluate(variable_expression)`
+2. Format for display:
+   - If string: show directly
+   - If object: pretty-print as JSON or summary
+   - If array: show length + sample items
+   - If long (>500 chars): show truncated + "see full output" link
+3. Display to user before question
+
+**Example**:
+```cheesecake
+SHOW: {draft}
+# VM displays: "Current draft (2,340 words): \n[truncated text]..."
+
+SHOW: {findings.summary}
+# VM displays: "Quantum computing shows rapid advances..."
+
+SHOW: "Estimated cost: ${total_cost}"
+# VM displays: "Estimated cost: $0.45"
+```
+
+#### Step 3: Present Question and Options
+
+Use `AskUserQuestion` tool:
+
+```javascript
+// Build options array for AskUserQuestion
+options = []
+for option in block.options:
+  options.append({
+    label: option.label,
+    description: summarize_action(option.action)  // Brief description of what happens
+  })
+
+// Call AskUserQuestion
+user_choice = AskUserQuestion({
+  question: block.ask_user_text,
+  header: block.checkpoint_name,
+  options: options,
+  multiSelect: false  // Interactive blocks are single-choice only
+})
+```
+
+**Action Description Generation**:
+- `VAR x = true` → "Set x to true"
+- `BREAK` → "Exit current loop"
+- `RETURN` → "End workflow execution"
+- `RUN SESSION(...)` → "Execute [agent name] session"
+- `CONTINUE` → "Continue to next iteration"
+
+#### Step 4: Execute Selected Action
+
+After user selects option:
+
+1. Find the matching option by label: `selected = find_option(user_choice, block.options)`
+2. Execute the action statement: `execute_statement(selected.action)`
+3. Update variables as needed
+4. Apply control flow effects (BREAK, CONTINUE, RETURN)
+
+**Examples**:
+
+```cheesecake
+OPTIONS:
+  - "approve" → VAR approved = true
+  # User selects "approve"
+  # VM executes: VAR approved = true
+  # Result: approved = true
+
+OPTIONS:
+  - "finalize" → BREAK
+  # User selects "finalize"
+  # VM executes: BREAK
+  # Result: Exit enclosing loop
+
+OPTIONS:
+  - "use opus" → VAR result = RUN SESSION(opus_agent): TASK: "..."
+  # User selects "use opus"
+  # VM executes: Spawns opus_agent session, waits for result, assigns to result
+  # Result: result variable contains session output
+```
+
+#### Step 5: Resume Execution
+
+After action completes:
+
+1. Update progress tracking (if paused, now resume)
+2. Continue with next statement after `END INTERACTIVE`
+3. Execution proceeds normally
+
+**State After Resume**:
+- All variables preserved
+- New variables from action available
+- Control flow effects applied (if BREAK/CONTINUE/RETURN)
+- Progress tracking resumes
+- Time tracking resumes
+
+### Special Cases
+
+#### INTERACTIVE in Loops
+
+When INTERACTIVE is inside a loop:
+
+```cheesecake
+LOOP UNTIL done MAX 5:
+  VAR result = RUN SESSION(agent): TASK: "..."
+
+  INTERACTIVE AT "review-iteration":
+    SHOW: {result}
+    ASK USER: "Continue?"
+    OPTIONS:
+      - "Yes" → CONTINUE
+      - "No" → BREAK
+    END OPTIONS
+  END INTERACTIVE
+END LOOP
+```
+
+**VM Behavior**:
+- Each iteration can pause at INTERACTIVE
+- User choice affects loop continuation (BREAK/CONTINUE)
+- Loop state preserved during pause
+- Iteration counter preserved
+
+#### INTERACTIVE in Conditionals
+
+```cheesecake
+IF **{quality} is low**:
+  INTERACTIVE AT "low-quality-handler":
+    ASK USER: "Quality is low. What to do?"
+    OPTIONS:
+      - "Retry" → VAR retry = true
+      - "Accept" → VAR retry = false
+    END OPTIONS
+  END INTERACTIVE
+END IF
+```
+
+**VM Behavior**:
+- INTERACTIVE only executes if condition is true
+- Pause happens conditionally
+- Variable updates from action available after block
+
+#### Action Execution Failures
+
+If the action statement fails during execution:
+
+```cheesecake
+OPTIONS:
+  - "Option A" → VAR x = RUN SESSION(agent): TASK: "..."  # Could fail
+END OPTIONS
+```
+
+**VM Behavior**:
+1. Try to execute action
+2. If fails (session error, timeout, etc.):
+   - Log error: "Interactive action failed: [error]"
+   - Apply normal error handling (try/catch if present)
+   - Workflow may continue or abort based on error handling
+
+### Progress Tracking Integration
+
+When INTERACTIVE pauses execution:
+
+**Progress Display**:
+```
+[■■■■■■□□□□] 60% complete
+
+✓ Phase 1: Research           [DONE]     8.5s
+⏸  Phase 2: Analysis          [PAUSED]   User input required
+○ Phase 3: Writing            [PENDING]
+
+[PAUSE] Waiting for user input at: approve-analysis
+```
+
+**Key Points**:
+- Use ⏸ symbol for paused phase
+- Show checkpoint name
+- Clear indication of pause state
+- Time counter pauses (not counted during user input)
+- Token counter pauses (no new tokens during pause)
+
+### Cost Tracking Integration
+
+INTERACTIVE blocks have **zero cost**:
+
+```cheesecake
+# Cost estimate example
+PHASE "Research":
+  VAR findings = RUN SESSION(researcher): TASK: "..."  # $0.02
+END PHASE
+
+INTERACTIVE AT "review":
+  SHOW: {findings}
+  ASK USER: "Proceed?"
+  OPTIONS:
+    - "Yes" → VAR proceed = true
+    - "No" → VAR proceed = false
+  END OPTIONS
+END INTERACTIVE  # $0.00 - no cost, no tokens
+
+PHASE "Analysis":
+  IF proceed:
+    VAR analysis = RUN SESSION(analyst): TASK: "..."  # $0.05
+  END IF
+END PHASE
+```
+
+**VM Behavior for Cost Tracking**:
+- INTERACTIVE blocks: 0 tokens, $0.00 cost
+- Time pauses during user input (not counted)
+- Cost only resumes after user provides input
+- Display cost estimate ranges based on user choices
+
+### Error Handling
+
+#### User Doesn't Provide Input
+
+If user session ends or times out before providing input:
+
+**VM Behavior**:
+1. Save checkpoint at INTERACTIVE point
+2. Workflow status: **SUSPENDED**
+3. Can resume later with `/cheesecake resume workflow.cheesecake`
+4. Resume loads checkpoint and re-presents INTERACTIVE
+
+#### Invalid Option Selected
+
+Shouldn't happen (AskUserQuestion validates), but if it does:
+
+**VM Behavior**:
+1. Log warning: "Invalid option selected, using first option as fallback"
+2. Execute first option's action
+3. Continue execution
+
+### Testing Interactive Workflows
+
+When testing workflows with INTERACTIVE blocks:
+
+**Test Mode Variable**:
+```cheesecake
+VAR test_mode = true  # Set by test runner
+
+IF test_mode:
+  # Mock: Auto-select first option without user input
+  VAR auto_choice = "option1"
+ELSE:
+  # Normal: Ask user
+  INTERACTIVE AT "checkpoint":
+    ASK USER: "Choose?"
+    OPTIONS:
+      - "option1" → VAR auto_choice = "option1"
+      - "option2" → VAR auto_choice = "option2"
+    END OPTIONS
+  END INTERACTIVE
+END IF
+```
+
+### Constraints
+
+**Not Allowed**:
+- ❌ INTERACTIVE inside PARALLEL blocks (would break parallel semantics)
+- ❌ Nested INTERACTIVE (INTERACTIVE inside INTERACTIVE)
+
+**If encountered**:
+- Parse Error: "INTERACTIVE cannot be used inside PARALLEL blocks"
+- Parse Error: "Nested INTERACTIVE blocks are not allowed"
+
+### Resume from Checkpoint
+
+If workflow pauses at INTERACTIVE and user resumes later:
+
+**Resume Process**:
+1. Load checkpoint: `state = LOAD ".cheesecake/state/interactive-{checkpoint_name}.json"`
+2. Restore variables: `restore_variables(state.variables)`
+3. Restore execution context: `execution_context = state.context`
+4. Re-present INTERACTIVE block (ask user again)
+5. Execute selected action
+6. Continue execution
+
+**Example**:
+```bash
+# First run - pauses at INTERACTIVE
+/cheesecake run workflow.cheesecake
+# → Pauses, saves checkpoint, exits
+
+# Later - resume from checkpoint
+/cheesecake resume workflow.cheesecake
+# → Loads checkpoint, re-presents INTERACTIVE, continues after user input
+```
+
+### Implementation Checklist for VM
+
+When implementing INTERACTIVE execution:
+
+- [ ] Save state before pause (variables, context, line number)
+- [ ] Format and display SHOW expression if present
+- [ ] Build options array with descriptions
+- [ ] Call AskUserQuestion tool with correct parameters
+- [ ] Parse user selection
+- [ ] Execute action statement associated with selection
+- [ ] Handle control flow effects (BREAK, CONTINUE, RETURN)
+- [ ] Update progress tracking (pause/resume indicators)
+- [ ] Ensure zero cost during pause
+- [ ] Support resume from checkpoint
+- [ ] Handle errors in action execution
+- [ ] Validate constraints (no PARALLEL, no nesting)
+
+---
+
+## 9. Error Handling
 
 ### Try/Catch
 
@@ -454,7 +805,7 @@ VAR data = RUN SESSION(agent):
 
 ---
 
-## 9. Context Passing
+## 10. Context Passing
 
 ### Between Sessions
 
@@ -481,7 +832,7 @@ VAR article = RUN SESSION(writer):
 
 ---
 
-## 10. Function Calls
+## 11. Function Calls
 
 ### Execution
 
@@ -507,7 +858,7 @@ VAR output = CALL research_topic(topic: "quantum computing")
 
 ---
 
-## 11. Import/Export
+## 12. Import/Export
 
 ### Import
 
@@ -525,7 +876,7 @@ VAR agent = NEW lib.Researcher()
 
 ---
 
-## 12. Progress Reporting
+## 13. Progress Reporting
 
 ### Reporting Format
 
@@ -554,7 +905,7 @@ During execution, report progress to user:
 
 ---
 
-## 13. Special Behaviors
+## 14. Special Behaviors
 
 ### Semantic Inference
 
@@ -577,7 +928,7 @@ When passing multiple variables as INPUT, intelligently format them for readabil
 
 ---
 
-## 14. Error Messages
+## 15. Error Messages
 
 Provide clear, actionable error messages:
 
@@ -599,7 +950,7 @@ Error: undefined variable
 
 ---
 
-## 15. Complete Execution Example
+## 16. Complete Execution Example
 
 ### Input File: `workflow.cheesecake`
 

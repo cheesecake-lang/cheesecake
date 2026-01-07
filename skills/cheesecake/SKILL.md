@@ -716,7 +716,268 @@ END LOOP
 
 ---
 
-## 9. State & Persistence
+## 9. Interactive Mode (v0.0.2+)
+
+**Purpose**: Pause workflow execution to request user input and make decisions based on user choices.
+
+### INTERACTIVE Construct
+
+```cheesecake
+INTERACTIVE AT "checkpoint-name":
+  SHOW: {variable_to_display}
+  ASK USER: "Question to ask the user?"
+  OPTIONS:
+    - "option1" → action1
+    - "option2" → action2
+    - "option3" → action3
+  END OPTIONS
+END INTERACTIVE
+```
+
+**Key Features**:
+- **Pause execution**: Workflow pauses gracefully without losing state
+- **Show context**: Display variables or data to help user decide
+- **Multiple choice**: User selects from 2-10 options
+- **Execute action**: Statement associated with chosen option executes
+- **Resume execution**: Workflow continues after user input
+- **Zero cost**: No AI sessions during pause
+
+### Components
+
+#### AT "checkpoint-name"
+
+Unique identifier for the interactive point (required):
+```cheesecake
+INTERACTIVE AT "review-draft":
+  ...
+END INTERACTIVE
+
+INTERACTIVE AT "approve-cost":
+  ...
+END INTERACTIVE
+```
+
+#### SHOW: {variable}
+
+Display context to user before asking (optional):
+```cheesecake
+SHOW: {draft}                           # Show full variable
+SHOW: {draft.summary}                   # Show property
+SHOW: "Current cost: ${total_cost}"     # Show formatted text
+```
+
+#### ASK USER: "Question?"
+
+The question presented to the user (required):
+```cheesecake
+ASK USER: "How should we proceed with this draft?"
+ASK USER: "The cost is $2.50. Continue with execution?"
+ASK USER: "Which research direction should we prioritize?"
+```
+
+#### OPTIONS
+
+Multiple choice options (required, 2-10 options):
+```cheesecake
+OPTIONS:
+  - "approve" → VAR approved = true
+  - "reject" → VAR approved = false
+  - "modify" → VAR needs_revision = true
+END OPTIONS
+
+OPTIONS:
+  - "continue" → CONTINUE
+  - "finalize" → BREAK
+  - "cancel" → RETURN
+END OPTIONS
+```
+
+### Example: Approval Workflow
+
+```cheesecake
+# Research with user approval before expensive analysis
+
+AGENT Researcher:
+  MODEL: sonnet
+  PROMPT: "You are a research assistant."
+
+AGENT Analyst:
+  MODEL: opus  # Expensive!
+  PROMPT: "You are an in-depth analyst."
+
+VAR researcher = NEW Researcher()
+VAR findings = RUN SESSION(researcher):
+  TASK: "Research quantum computing trends"
+
+# Pause and ask user if they want to proceed
+INTERACTIVE AT "approve-analysis":
+  SHOW: {findings.summary}
+  ASK USER: "Research complete. Proceed with Opus analysis ($0.50)?"
+  OPTIONS:
+    - "Yes, analyze" → VAR proceed = true
+    - "No, skip analysis" → VAR proceed = false
+  END OPTIONS
+END INTERACTIVE
+
+# Only run expensive analysis if approved
+IF proceed == true:
+  VAR analyst = NEW Analyst()
+  VAR deep_analysis = RUN SESSION(analyst):
+    TASK: "Perform deep analysis of these findings"
+    INPUT: {findings}
+
+  PRINT "Analysis complete!"
+ELSE:
+  PRINT "Analysis skipped by user"
+END IF
+```
+
+### Example: Iterative Review
+
+```cheesecake
+# Writing workflow with user review at each iteration
+
+AGENT Writer:
+  MODEL: opus
+  PROMPT: "You are a creative writer."
+
+VAR writer = NEW Writer()
+VAR draft = RUN SESSION(writer):
+  TASK: "Write an article about AI safety"
+
+VAR continue_refining = true
+VAR iterations = 0
+
+LOOP UNTIL continue_refining == false MAX 5:
+  VAR iterations = iterations + 1
+
+  # Show draft and ask user what to do
+  INTERACTIVE AT "review-draft-{iterations}":
+    SHOW: {draft}
+    ASK USER: "Review iteration {iterations}. How should we proceed?"
+    OPTIONS:
+      - "Continue refining" → VAR action = "refine"
+      - "Finalize now" → VAR continue_refining = false
+      - "Start over" → VAR action = "restart"
+    END OPTIONS
+  END INTERACTIVE
+
+  # Handle user choice
+  IF action == "finalize":
+    PRINT "✓ Draft finalized by user"
+
+  ELIF action == "restart":
+    VAR draft = RUN SESSION(writer):
+      TASK: "Write a completely new article about AI safety"
+
+  ELSE:  # action == "refine"
+    VAR draft = RUN SESSION(writer):
+      TASK: "Improve this draft based on your judgment"
+      INPUT: {draft}
+  END IF
+END LOOP
+
+SAVE draft TO "output/article.md"
+PRINT "✅ Article saved!"
+```
+
+### Rules and Constraints
+
+**Allowed**:
+- ✅ INTERACTIVE in conditionals
+- ✅ INTERACTIVE in loops
+- ✅ INTERACTIVE in sequential code
+- ✅ Multiple INTERACTIVE blocks in same workflow
+
+**Not Allowed**:
+- ❌ INTERACTIVE inside PARALLEL blocks (breaks parallel semantics)
+- ❌ Nested INTERACTIVE blocks (no INTERACTIVE inside INTERACTIVE)
+
+**Requirements**:
+- AT "name" must be unique within workflow
+- ASK USER must end with `?` (convention)
+- OPTIONS must have 2-10 choices
+- Each option must have label and action
+
+### Progress During Pause
+
+When workflow pauses at INTERACTIVE:
+
+```
+[■■■■■■□□□□] 60% complete
+
+✓ Phase 1: Research           [DONE]     8.5s
+⏸  Phase 2: Review            [PAUSED]   User input required
+○ Phase 3: Writing            [PENDING]
+
+[PAUSE] Waiting for user input at checkpoint: review-draft
+```
+
+### Cost During Pause
+
+INTERACTIVE blocks have **zero cost**:
+- No AI sessions spawned
+- User input time not counted in execution time
+- Workflow resumes after user provides input
+
+### Integration with AskUserQuestion Tool
+
+INTERACTIVE uses Claude Code's `AskUserQuestion` tool internally:
+- Question from ASK USER
+- Options from OPTIONS block
+- User selection triggers action execution
+
+### Best Practices
+
+1. **Clear Questions**: Be specific about what you're asking
+   ```cheesecake
+   # Good
+   ASK USER: "Draft review complete. How should we proceed?"
+
+   # Bad
+   ASK USER: "What next?"  # Too vague
+   ```
+
+2. **Show Context**: Display relevant information before asking
+   ```cheesecake
+   SHOW: "Task: {task_description}"
+   SHOW: "Estimated cost: ${estimated_cost}"
+   ASK USER: "Proceed with this operation?"
+   ```
+
+3. **Limit Options**: Keep choices manageable (2-4 ideal, max 10)
+
+4. **Provide Escape Routes**: Always include cancel/skip option
+   ```cheesecake
+   OPTIONS:
+     - "Proceed" → VAR proceed = true
+     - "Skip" → VAR proceed = false  # Escape route
+     - "Cancel workflow" → RETURN    # Exit option
+   END OPTIONS
+   ```
+
+5. **Descriptive Checkpoint Names**: Use meaningful names
+   ```cheesecake
+   # Good
+   INTERACTIVE AT "review-draft-before-publish":
+
+   # Bad
+   INTERACTIVE AT "checkpoint1":
+   ```
+
+### Use Cases
+
+- **Approval workflows**: Cost approval, quality review, safety checks
+- **Iterative refinement**: User feedback at each iteration
+- **Agent/model selection**: Let user choose which agent to use
+- **Path branching**: User chooses workflow direction
+- **Early exit points**: User can cancel expensive operations
+
+**Note**: INTERACTIVE is **optional in v0.0.1**. Added in v0.0.2 for human-in-the-loop workflows. Existing workflows without INTERACTIVE blocks continue to work perfectly.
+
+---
+
+## 10. State & Persistence
 
 ### Checkpoints
 
@@ -805,7 +1066,7 @@ MEMORY project_state.history.APPEND({
 
 ---
 
-## 10. Error Handling
+## 11. Error Handling
 
 ### Try/Catch/Finally
 
@@ -858,7 +1119,7 @@ END TRY
 
 ---
 
-## 11. Functions
+## 12. Functions
 
 Functions are reusable workflows with parameters and return values.
 
@@ -910,7 +1171,7 @@ END FUNCTION
 
 ---
 
-## 12. Modules & Imports
+## 13. Modules & Imports
 
 ### Import Syntax
 
@@ -959,7 +1220,7 @@ VAR article = RUN SESSION(writer): TASK: "Write article" INPUT: {findings}
 
 ---
 
-## 13. Built-in Functions & Commands
+## 14. Built-in Functions & Commands
 
 ### Logging
 
@@ -1004,7 +1265,7 @@ DELETE file                      # Delete file
 
 ---
 
-## 14. Operators & Comparisons
+## 15. Operators & Comparisons
 
 ### Assignment
 
@@ -1033,7 +1294,7 @@ IF **NOT {failed}**:
 
 ---
 
-## 15. Best Practices
+## 16. Best Practices
 
 ### 1. Use Descriptive Names
 
@@ -1094,7 +1355,7 @@ END FOR
 
 ---
 
-## 16. Complete Example
+## 17. Complete Example
 
 Here's a comprehensive example using many CheeseCake features:
 
