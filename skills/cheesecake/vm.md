@@ -1,7 +1,7 @@
 # CheeseCake VM Execution Semantics
 # Purpose: Define how AI agents execute .cheesecake programs
 # Part of: CheeseCake v0.0.1 - Module 3 (VM Execution Engine)
-# Updated: v0.0.2 - Added INTERACTIVE pause/resume execution semantics
+# Updated: v0.0.2 - Added INTERACTIVE (Module 10), Cost Management (Module 11), Events & Scheduling (Module 12)
 #
 # This file explains the runtime behavior of the CheeseCake VM.
 # You (the AI) ARE the VM when executing .cheesecake files.
@@ -1155,7 +1155,350 @@ For cost management to work, the VM must:
 
 ---
 
-## 10. Error Handling
+## 10. Event & Schedule Execution (v0.0.2+)
+
+This section defines how the VM handles events and schedules. See `events.md` for complete specification.
+
+### Event Registration
+
+During the PARSE phase, the VM collects all event handlers:
+
+```
+EventRegistry = {
+  "file_changed": [
+    {handler: handler1, where: "path MATCHES 'src/**'", params: ["path", "type"]},
+    {handler: handler2, where: null, params: ["path"]}
+  ],
+  "custom_event": [
+    {handler: handler3, where: "status == 'active'", params: ["data", "status"]}
+  ]
+}
+
+ListenerRegistry = {
+  "data_ready": [handler4, handler5],
+  "task_complete": [handler6]
+}
+
+ScheduleRegistry = {
+  "health_check": {
+    type: "INTERVAL",
+    value: "1h",
+    task: taskBlock,
+    retry: 2,
+    onFailure: failureAction
+  }
+}
+```
+
+### Event Dispatch Protocol
+
+When an event occurs (via EMIT or external trigger):
+
+```
+dispatch_event(event_name, event_data):
+  1. Look up event_name in EventRegistry and ListenerRegistry
+  2. For each matching handler:
+     a. Create isolated handler scope
+     b. Bind event parameters to variables
+     c. If WHERE clause present:
+        - Evaluate condition
+        - Skip handler if false
+     d. Execute handler body
+     e. Catch any errors (log, don't propagate)
+     f. Continue to next handler
+  3. Track event chain depth (prevent infinite loops)
+  4. Return (events don't return values)
+```
+
+### EMIT Execution
+
+When VM encounters EMIT statement:
+
+```cheesecake
+EMIT task_complete(task_id: "123", status: "success")
+```
+
+**VM Behavior:**
+
+```
+1. Build event object: {task_id: "123", status: "success"}
+2. Check event chain depth < MAX_EVENT_DEPTH (default: 10)
+3. If depth exceeded:
+   - LOG WARNING: "Event chain limit reached"
+   - Return without dispatching
+4. Increment event chain depth
+5. Call dispatch_event("task_complete", event_object)
+6. Decrement event chain depth
+```
+
+### ON EVENT Execution
+
+When handler matches:
+
+```cheesecake
+ON EVENT file_changed(path, type) WHERE path MATCHES "*.ts":
+  LOG INFO: "TS file changed: {path}"
+  VAR result = RUN SESSION(linter): TASK: "Lint {path}"
+END ON
+```
+
+**VM Behavior:**
+
+```
+1. Receive event: {path: "src/app.ts", type: "modified"}
+2. Check WHERE clause: "src/app.ts" MATCHES "*.ts" → true
+3. Create handler scope with:
+   - path = "src/app.ts"
+   - type = "modified"
+4. Execute handler body:
+   - LOG INFO: "TS file changed: src/app.ts"
+   - VAR result = RUN SESSION(linter)...
+5. Cleanup handler scope
+6. If error occurred, log but continue
+```
+
+### LISTEN FOR Execution
+
+Lightweight event listener:
+
+```cheesecake
+LISTEN FOR data_ready:
+  PRINT event.source
+END LISTEN
+```
+
+**VM Behavior:**
+
+```
+1. Receive event: {source: "api", items: [...]}
+2. Create handler scope with:
+   - event = {source: "api", items: [...]}
+3. Execute handler body using event.* notation
+4. Cleanup handler scope
+```
+
+### Schedule Registration
+
+Schedules are registered but not auto-executed (requires runtime):
+
+```cheesecake
+SCHEDULE hourly_check:
+  INTERVAL: 1h
+  TASK: RUN SESSION(checker): TASK: "Check"
+  RETRY: 2
+END SCHEDULE
+```
+
+**VM Behavior:**
+
+```
+1. Validate schedule:
+   - Exactly one timing specifier (INTERVAL, CRON, ONCE_AT)
+   - TASK is present
+   - Duration format valid
+2. Register in ScheduleRegistry:
+   {
+     name: "hourly_check",
+     type: "INTERVAL",
+     value: "1h",
+     task: <task block>,
+     retry: 2,
+     startAt: null,
+     endAt: null
+   }
+3. Log: "Schedule 'hourly_check' registered (INTERVAL: 1h)"
+```
+
+### Manual Schedule Trigger
+
+For testing, schedules can be triggered manually:
+
+```
+/cheesecake trigger hourly_check
+```
+
+**VM Behavior:**
+
+```
+1. Look up "hourly_check" in ScheduleRegistry
+2. If not found: ERROR "Unknown schedule"
+3. Execute task block:
+   - Track retry attempts
+   - On failure:
+     - If retries remaining, retry
+     - Else execute ON_FAILURE
+   - On success: execute ON_SUCCESS
+4. Report result
+```
+
+### Event Filtering (WHERE Clause)
+
+**Literal Comparisons:**
+```
+path == "src/app.ts"        → exact match
+status != "pending"         → not equal
+count > 10                  → numeric comparison
+```
+
+**Pattern Matching:**
+```
+path MATCHES "*.ts"         → glob pattern
+path MATCHES "src/**/*.js"  → recursive glob
+```
+
+**Semantic Conditions:**
+```
+**{payload} contains error data**  → AI evaluation
+**{issue} is urgent**              → AI understanding
+```
+
+**Combined:**
+```
+path MATCHES "src/**" AND type == "modified" AND **{path} is not test file**
+```
+
+### Event Chain Prevention
+
+To prevent infinite event loops:
+
+```
+MAX_EVENT_DEPTH = 10
+
+EventChainTracker:
+  depth: 0
+  chain: []
+
+before_dispatch(event):
+  if depth >= MAX_EVENT_DEPTH:
+    LOG WARNING: "Event chain limit reached"
+    return SKIP
+  depth++
+  chain.push(event_name)
+
+after_dispatch():
+  depth--
+  chain.pop()
+```
+
+### Handler Error Isolation
+
+Errors in one handler don't affect others:
+
+```cheesecake
+ON EVENT my_event():
+  THROW "Error in handler 1"  # Logged, continues
+END ON
+
+ON EVENT my_event():
+  LOG INFO: "Handler 2"       # Still executes
+END ON
+```
+
+**VM Behavior:**
+
+```
+dispatch "my_event":
+  handler 1:
+    - Attempt execution
+    - THROW caught
+    - LOG ERROR: "Handler error: Error in handler 1"
+    - Continue to next handler
+  handler 2:
+    - Execute normally
+    - LOG INFO: "Handler 2"
+```
+
+### Schedule Task Execution
+
+When a schedule fires (manually or via daemon):
+
+```cheesecake
+SCHEDULE backup:
+  INTERVAL: 1d
+  TASK:
+    VAR result = RUN SESSION(backup_agent): TASK: "Backup"
+    SAVE result TO "backup/latest.json"
+  END TASK
+  RETRY: 3
+  ON_FAILURE: EMIT backup_failed()
+  ON_SUCCESS: LOG SUCCESS: "Backup complete"
+END SCHEDULE
+```
+
+**VM Behavior:**
+
+```
+execute_schedule("backup"):
+  attempts = 0
+  max_attempts = 3 + 1  # RETRY + initial
+
+  while attempts < max_attempts:
+    try:
+      execute task block
+      execute ON_SUCCESS (if present)
+      return SUCCESS
+    catch error:
+      attempts++
+      if attempts < max_attempts:
+        LOG WARNING: "Retry {attempts}/{RETRY}"
+      else:
+        execute ON_FAILURE (if present)
+        return FAILURE
+```
+
+### Integration with Other Features
+
+**With Progress Tracking:**
+- Event handlers show in progress display
+- Handler execution time tracked
+- Event dispatch shown as progress update
+
+**With Cost Management:**
+- Sessions in event handlers count toward budget
+- Warnings apply to handler sessions
+- Cost tracked per handler
+
+**With INTERACTIVE:**
+- Events can trigger INTERACTIVE blocks
+- EMIT can be used in INTERACTIVE options
+
+**With Checkpoints:**
+- Event/schedule registrations saved with checkpoint
+- On resume, handlers are re-registered
+
+### Progress Display During Events
+
+```
+🎯 Executing: workflow.cheesecake
+
+→ Event dispatched: file_changed
+  ⏳ Handler 1: Linting src/app.ts...
+  ✓ Handler 1: Complete (1.2s)
+  ⏳ Handler 2: Logging...
+  ✓ Handler 2: Complete (0.1s)
+```
+
+### VM Implementation Checklist
+
+For VM implementers:
+
+- [ ] Parse and collect ON EVENT declarations
+- [ ] Parse and collect LISTEN FOR declarations
+- [ ] Parse and collect SCHEDULE declarations
+- [ ] Build EventRegistry, ListenerRegistry, ScheduleRegistry
+- [ ] Implement dispatch_event function
+- [ ] Implement EMIT execution
+- [ ] Implement WHERE clause evaluation
+- [ ] Implement MATCHES pattern matching
+- [ ] Track event chain depth
+- [ ] Isolate handler errors
+- [ ] Support manual schedule triggers
+- [ ] Integrate with cost tracking
+- [ ] Update progress display for events
+
+---
+
+## 11. Error Handling
 
 ### Try/Catch
 
@@ -1205,7 +1548,7 @@ VAR data = RUN SESSION(agent):
 
 ---
 
-## 11. Context Passing
+## 12. Context Passing
 
 ### Between Sessions
 
@@ -1232,7 +1575,7 @@ VAR article = RUN SESSION(writer):
 
 ---
 
-## 12. Function Calls
+## 13. Function Calls
 
 ### Execution
 
@@ -1258,7 +1601,7 @@ VAR output = CALL research_topic(topic: "quantum computing")
 
 ---
 
-## 13. Import/Export
+## 14. Import/Export
 
 ### Import
 
@@ -1276,7 +1619,7 @@ VAR agent = NEW lib.Researcher()
 
 ---
 
-## 14. Progress Reporting
+## 15. Progress Reporting
 
 ### Reporting Format
 
@@ -1305,7 +1648,7 @@ During execution, report progress to user:
 
 ---
 
-## 15. Special Behaviors
+## 16. Special Behaviors
 
 ### Semantic Inference
 
@@ -1328,7 +1671,7 @@ When passing multiple variables as INPUT, intelligently format them for readabil
 
 ---
 
-## 16. Error Messages
+## 17. Error Messages
 
 Provide clear, actionable error messages:
 
@@ -1350,7 +1693,7 @@ Error: undefined variable
 
 ---
 
-## 17. Complete Execution Example
+## 18. Complete Execution Example
 
 ### Input File: `workflow.cheesecake`
 

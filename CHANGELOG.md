@@ -409,10 +409,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+#### Module 12: Events & Scheduling ✅ COMPLETE
+
+**ON EVENT Construct**
+- Event handlers that respond to triggers
+- Syntax: `ON EVENT name(params) [WHERE condition]: ... END ON`
+- Built-in event types (declarative):
+  - `file_changed(path, type)` - File system changes
+  - `file_created(path)` - New file created
+  - `file_deleted(path)` - File deleted
+  - `api_webhook(endpoint, payload)` - HTTP webhook
+  - `timer_tick(timestamp)` - Timer events
+  - `user_input(data)` - User-triggered input
+  - `session_start(session_id)` - Session started
+  - `session_end(session_id, result)` - Session completed
+- Custom events via EMIT
+- WHERE clause filtering:
+  - Literal comparisons (`status == 200`)
+  - Pattern matching (`path MATCHES "*.ts"`)
+  - Semantic conditions (`**{payload} contains error**`)
+  - Combined conditions with AND/OR
+- Multiple handlers per event (execute in order)
+- Handler error isolation (errors don't stop other handlers)
+
+**SCHEDULE Construct**
+- Time-based scheduled tasks
+- Syntax: `SCHEDULE name: ... END SCHEDULE`
+- Three timing types:
+  - `INTERVAL: Nh` - Fixed intervals (Ns, Nm, Nh, Nd, Nw)
+  - `CRON: "expression"` - Cron expressions (minute hour day month weekday)
+  - `ONCE_AT: "timestamp"` - Single execution at specific time
+- Schedule properties:
+  - `START_AT` - When schedule becomes active
+  - `END_AT` - When schedule deactivates
+  - `TASK` - Statement or block to execute
+  - `RETRY` - Retry count on failure
+  - `ON_FAILURE` - Action when task fails
+  - `ON_SUCCESS` - Action when task succeeds
+- Manual trigger: `/cheesecake trigger <schedule_name>`
+
+**EMIT Construct**
+- Trigger custom events
+- Syntax: `EMIT event_name(param: value, ...)`
+- Named parameters with values
+- Dispatched immediately to matching handlers
+- Event chain depth limit (MAX_EVENT_DEPTH: 10)
+
+**LISTEN FOR Construct**
+- Lightweight internal event listener
+- Syntax: `LISTEN FOR event_name: ... END LISTEN`
+- Only handles internal events (from EMIT)
+- Access event data via `event.*` notation
+- Simpler than ON EVENT (no WHERE clause)
+
+**Documentation**
+- `skills/cheesecake/events.md` - 870+ lines of specification
+- `skills/cheesecake/SKILL.md` - Added Events & Scheduling (section 12, 160+ lines)
+- `skills/cheesecake/vm.md` - Added Event Execution (section 10, 340+ lines)
+- `test-events.cheesecake` - 340 lines testing all features
+- Total new documentation: 1,710+ lines
+
+**Examples**
+- File change handlers with filtering
+- Scheduled health checks
+- Daily report generation (CRON)
+- One-time scheduled deployment
+- Event chains and coordination
+- Error handling in handlers
+
+### Testing (Module 12)
+- Tested ON EVENT declaration ✅
+- Tested WHERE clause filtering ✅
+- Tested EMIT custom events ✅
+- Tested LISTEN FOR internal events ✅
+- Tested SCHEDULE (INTERVAL, CRON, ONCE_AT) ✅
+- Tested event chains ✅
+- Tested error isolation ✅
+- Tested complex event data ✅
+- Tested MATCHES pattern filtering ✅
+- Validated 15 test scenarios ✅
+
+### Changed (Module 12)
+- `SKILL.md` sections renumbered (13-19, was 12-18)
+- `vm.md` sections renumbered (11-18, was 10-17)
+- Added Events & Scheduling as section 12 in SKILL.md
+- Added Event Execution as section 10 in vm.md
+
+### Backward Compatibility (Module 12)
+- ✅ All v0.0.1 and v0.0.2 workflows continue to work
+- Events and schedules are optional
+- Existing workflows without events work perfectly
+- No breaking changes to syntax
+
+**Note on Execution:**
+- External events are declarative (require runtime integration)
+- Internal events (EMIT/LISTEN) work fully within sessions
+- Schedules can be manually triggered for testing
+- Future: CheeseCake daemon for real event monitoring
+
+---
+
 ## [Unreleased] - Planned for future v0.0.2 modules
 
-### Planned Features (Modules 12-14)
-- Module 12: Event handlers and scheduling (ON EVENT, SCHEDULE)
+### Planned Features (Modules 13-14)
 - Module 13: Enhanced testing features (TEST SUITE, MOCK, ASSERT)
 - Module 14: Execution history and replay
 

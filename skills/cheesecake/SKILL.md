@@ -1,7 +1,7 @@
 # CheeseCake Language Specification
 # Purpose: Complete language definition for AI agents to understand and execute .cheesecake files
 # Part of: CheeseCake v0.0.1 - Module 2 (Language Specification)
-# Updated: v0.0.2 - Added PHASE construct (Module 9), INTERACTIVE construct (Module 10), CONFIG block (Module 11)
+# Updated: v0.0.2 - Added PHASE (Module 9), INTERACTIVE (Module 10), CONFIG (Module 11), Events & Scheduling (Module 12)
 #
 # This file teaches AI agents the complete CheeseCake syntax and semantics.
 # When you read a .cheesecake file, use this specification to understand and execute it.
@@ -1349,7 +1349,167 @@ PRINT "Total cost: {CURRENT_COST} / {CONFIG.BUDGET}"
 
 ---
 
-## 12. Error Handling
+## 12. Events & Scheduling (v0.0.2+)
+
+CheeseCake supports reactive programming through events and scheduling. See `events.md` for complete specification.
+
+### ON EVENT
+
+Declare event handlers that respond to triggers:
+
+```cheesecake
+ON EVENT event_name(param1, param2) [WHERE condition]:
+  # Handler body
+END ON
+```
+
+**Example:**
+
+```cheesecake
+# Handle file changes
+ON EVENT file_changed(path, type) WHERE path MATCHES "src/**/*.ts":
+  LOG INFO: "TypeScript file changed: {path}"
+  VAR result = RUN SESSION(linter): TASK: "Lint {path}"
+  IF **{result} has errors**:
+    EMIT lint_errors(path: path, errors: result.errors)
+  END IF
+END ON
+
+# Handle custom events
+ON EVENT task_complete(task_id, status):
+  LOG INFO: "Task {task_id} finished with status: {status}"
+END ON
+```
+
+**Built-in Events (Declarative):**
+- `file_changed(path, type)` - File system changes
+- `file_created(path)` - New file created
+- `file_deleted(path)` - File deleted
+- `api_webhook(endpoint, payload)` - HTTP webhook
+- `timer_tick(timestamp)` - Timer events
+- `user_input(data)` - User-triggered input
+- `session_start(session_id)` - Session started
+- `session_end(session_id, result)` - Session completed
+
+**WHERE Clause Filters:**
+
+```cheesecake
+# Literal comparison
+ON EVENT file_changed(path) WHERE path MATCHES "*.ts":
+
+# Semantic condition
+ON EVENT api_webhook(payload) WHERE **{payload} contains error**:
+
+# Combined conditions
+ON EVENT new_issue(issue) WHERE issue.priority == "high" AND **{issue} is urgent**:
+```
+
+### SCHEDULE
+
+Declare time-based scheduled tasks:
+
+```cheesecake
+SCHEDULE schedule_name:
+  INTERVAL: duration | CRON: "expression" | ONCE_AT: "timestamp"
+  [START_AT: "timestamp"]
+  [END_AT: "timestamp"]
+  TASK: statement | TASK: ... END TASK
+  [RETRY: number]
+  [ON_FAILURE: action]
+  [ON_SUCCESS: action]
+END SCHEDULE
+```
+
+**Duration Formats:** `Ns` (seconds), `Nm` (minutes), `Nh` (hours), `Nd` (days), `Nw` (weeks)
+
+**Examples:**
+
+```cheesecake
+# Every hour
+SCHEDULE health_check:
+  INTERVAL: 1h
+  TASK: RUN SESSION(monitor): TASK: "Check system health"
+  RETRY: 2
+  ON_FAILURE: EMIT alert(severity: "critical")
+END SCHEDULE
+
+# Daily at 9 AM (cron)
+SCHEDULE daily_report:
+  CRON: "0 9 * * *"
+  TASK:
+    VAR report = RUN SESSION(reporter): TASK: "Generate report"
+    SAVE report TO "reports/daily-{TODAY()}.md"
+  END TASK
+END SCHEDULE
+
+# One-time scheduled task
+SCHEDULE deployment:
+  ONCE_AT: "2026-01-20T14:00:00Z"
+  TASK: RUN SESSION(deployer): TASK: "Deploy to production"
+END SCHEDULE
+```
+
+### EMIT
+
+Trigger custom events:
+
+```cheesecake
+EMIT event_name(param1: value1, param2: value2, ...)
+```
+
+**Example:**
+
+```cheesecake
+# Emit completion event
+EMIT task_complete(task_id: "123", status: "success", duration: elapsed)
+
+# Emit with complex data
+VAR analysis = RUN SESSION(analyzer): TASK: "Analyze"
+EMIT analysis_ready(data: analysis, timestamp: NOW())
+```
+
+### LISTEN FOR
+
+Lightweight listener for internal events (emitted via EMIT):
+
+```cheesecake
+LISTEN FOR event_name:
+  # Access event data via event.param
+END LISTEN
+```
+
+**Example:**
+
+```cheesecake
+# Producer
+EMIT data_ready(items: [1, 2, 3], source: "api")
+
+# Consumer
+LISTEN FOR data_ready:
+  LOG INFO: "Received {event.items.length} items from {event.source}"
+  VAR processed = RUN SESSION(processor): TASK: "Process" INPUT: {event.items}
+END LISTEN
+```
+
+### Rules
+
+1. **ON EVENT**: Handles both external and internal events
+2. **LISTEN FOR**: Only handles internal events (EMIT)
+3. **Multiple handlers**: Same event can have multiple handlers (execute in order)
+4. **Error isolation**: Handler errors don't stop other handlers
+5. **No nesting**: Cannot nest ON EVENT or SCHEDULE blocks
+6. **Schedules are declarative**: Actual scheduling requires runtime integration
+
+### Note on Execution
+
+Since CheeseCake is AI-interpreted:
+- **External events** (file_changed, etc.) are declarative - require runtime integration
+- **Internal events** (EMIT/LISTEN) work fully within a session
+- **Schedules** can be manually triggered: `/cheesecake trigger <schedule_name>`
+
+---
+
+## 13. Error Handling
 
 ### Try/Catch/Finally
 
@@ -1402,7 +1562,7 @@ END TRY
 
 ---
 
-## 13. Functions
+## 14. Functions
 
 Functions are reusable workflows with parameters and return values.
 
@@ -1454,7 +1614,7 @@ END FUNCTION
 
 ---
 
-## 14. Modules & Imports
+## 15. Modules & Imports
 
 ### Import Syntax
 
@@ -1503,7 +1663,7 @@ VAR article = RUN SESSION(writer): TASK: "Write article" INPUT: {findings}
 
 ---
 
-## 15. Built-in Functions & Commands
+## 16. Built-in Functions & Commands
 
 ### Logging
 
@@ -1548,7 +1708,7 @@ DELETE file                      # Delete file
 
 ---
 
-## 16. Operators & Comparisons
+## 17. Operators & Comparisons
 
 ### Assignment
 
@@ -1577,7 +1737,7 @@ IF **NOT {failed}**:
 
 ---
 
-## 17. Best Practices
+## 18. Best Practices
 
 ### 1. Use Descriptive Names
 
@@ -1638,7 +1798,7 @@ END FOR
 
 ---
 
-## 18. Complete Example
+## 19. Complete Example
 
 Here's a comprehensive example using many CheeseCake features:
 

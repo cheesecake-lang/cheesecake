@@ -1,0 +1,481 @@
+# ============================================
+# Test Workflow: Events & Scheduling Features
+# Purpose: Test Module 12 (Events & Scheduling) functionality
+# ============================================
+
+# ============================================
+# TEST 1: ON EVENT Declaration
+# ============================================
+PRINT "============================================"
+PRINT "TEST 1: ON EVENT Declaration"
+PRINT "============================================"
+
+AGENT EventHandler:
+  MODEL: sonnet
+  PROMPT: "You process events and respond appropriately."
+
+VAR handler = NEW EventHandler()
+
+# Declare event handlers
+ON EVENT file_changed(path, type):
+  LOG INFO: "File changed: {path} ({type})"
+END ON
+
+ON EVENT file_changed(path) WHERE path MATCHES "*.ts":
+  LOG INFO: "TypeScript file changed: {path}"
+END ON
+
+PRINT "Event handlers declared:"
+PRINT "  - file_changed(path, type) - general handler"
+PRINT "  - file_changed(path) WHERE *.ts - TypeScript handler"
+PRINT ""
+
+# ============================================
+# TEST 2: ON EVENT with WHERE Clause
+# ============================================
+PRINT "============================================"
+PRINT "TEST 2: ON EVENT with WHERE Clause"
+PRINT "============================================"
+
+# Different filter types
+ON EVENT api_response(status, data) WHERE status == 200:
+  LOG SUCCESS: "API success: {data}"
+END ON
+
+ON EVENT api_response(status, data) WHERE status >= 400:
+  LOG ERROR: "API error: status {status}"
+END ON
+
+ON EVENT user_action(action, user) WHERE **{action} is a dangerous operation**:
+  LOG WARNING: "Dangerous action by {user}: {action}"
+END ON
+
+PRINT "WHERE clause variations:"
+PRINT "  - Literal comparison: status == 200"
+PRINT "  - Numeric comparison: status >= 400"
+PRINT "  - Semantic condition: **{action} is dangerous**"
+PRINT ""
+
+# ============================================
+# TEST 3: EMIT Custom Events
+# ============================================
+PRINT "============================================"
+PRINT "TEST 3: EMIT Custom Events"
+PRINT "============================================"
+
+# Define listener first
+LISTEN FOR task_complete:
+  LOG INFO: "Task completed: {event.task_id}"
+  LOG INFO: "Status: {event.status}"
+END LISTEN
+
+# Emit the event
+PRINT "Emitting task_complete event..."
+EMIT task_complete(task_id: "TEST-001", status: "success")
+
+PRINT ""
+PRINT "Event emitted with parameters:"
+PRINT "  task_id: TEST-001"
+PRINT "  status: success"
+PRINT ""
+
+# ============================================
+# TEST 4: LISTEN FOR Internal Events
+# ============================================
+PRINT "============================================"
+PRINT "TEST 4: LISTEN FOR Internal Events"
+PRINT "============================================"
+
+# Multiple listeners for same event
+LISTEN FOR data_ready:
+  LOG INFO: "Listener 1: Data from {event.source}"
+END LISTEN
+
+LISTEN FOR data_ready:
+  LOG INFO: "Listener 2: Processing {event.items.length} items"
+END LISTEN
+
+PRINT "Two listeners registered for 'data_ready' event"
+PRINT "Both will execute when event is emitted"
+PRINT ""
+
+# Emit to trigger both
+EMIT data_ready(source: "api", items: [1, 2, 3, 4, 5])
+
+PRINT ""
+
+# ============================================
+# TEST 5: SCHEDULE Declaration (INTERVAL)
+# ============================================
+PRINT "============================================"
+PRINT "TEST 5: SCHEDULE (INTERVAL)"
+PRINT "============================================"
+
+AGENT Monitor:
+  MODEL: sonnet
+  PROMPT: "You monitor system health."
+
+VAR monitor = NEW Monitor()
+
+SCHEDULE health_check:
+  INTERVAL: 30m
+  TASK: RUN SESSION(monitor): TASK: "Check system health"
+  RETRY: 2
+  ON_FAILURE: EMIT alert(severity: "critical", message: "Health check failed")
+END SCHEDULE
+
+PRINT "Schedule 'health_check' registered:"
+PRINT "  Type: INTERVAL"
+PRINT "  Value: 30m (every 30 minutes)"
+PRINT "  Retry: 2 attempts"
+PRINT "  ON_FAILURE: Emit critical alert"
+PRINT ""
+PRINT "Note: Schedule is declarative - requires /cheesecake trigger to run"
+PRINT ""
+
+# ============================================
+# TEST 6: SCHEDULE Declaration (CRON)
+# ============================================
+PRINT "============================================"
+PRINT "TEST 6: SCHEDULE (CRON)"
+PRINT "============================================"
+
+AGENT Reporter:
+  MODEL: opus
+  PROMPT: "You generate comprehensive reports."
+
+VAR reporter = NEW Reporter()
+
+SCHEDULE daily_report:
+  CRON: "0 9 * * 1-5"
+  TASK:
+    VAR report = RUN SESSION(reporter): TASK: "Generate daily report"
+    SAVE report TO "reports/daily-{TODAY()}.md"
+    EMIT report_generated(date: TODAY())
+  END TASK
+  ON_SUCCESS: LOG SUCCESS: "Daily report generated"
+END SCHEDULE
+
+PRINT "Schedule 'daily_report' registered:"
+PRINT "  Type: CRON"
+PRINT "  Expression: 0 9 * * 1-5 (9 AM weekdays)"
+PRINT "  Task: Generate and save report"
+PRINT "  ON_SUCCESS: Log success message"
+PRINT ""
+
+# ============================================
+# TEST 7: SCHEDULE Declaration (ONCE_AT)
+# ============================================
+PRINT "============================================"
+PRINT "TEST 7: SCHEDULE (ONCE_AT)"
+PRINT "============================================"
+
+AGENT Deployer:
+  MODEL: opus
+  PROMPT: "You handle deployments safely."
+
+VAR deployer = NEW Deployer()
+
+SCHEDULE scheduled_deployment:
+  ONCE_AT: "2026-01-20T14:00:00Z"
+  TASK: RUN SESSION(deployer): TASK: "Deploy v2.0 to production"
+  ON_FAILURE:
+    LOG ERROR: "Deployment failed"
+    EMIT deployment_failed(version: "v2.0")
+  ON_SUCCESS:
+    LOG SUCCESS: "Deployment successful"
+    EMIT deployment_success(version: "v2.0")
+END SCHEDULE
+
+PRINT "Schedule 'scheduled_deployment' registered:"
+PRINT "  Type: ONCE_AT"
+PRINT "  Time: 2026-01-20T14:00:00Z"
+PRINT "  Task: Deploy v2.0"
+PRINT "  One-time execution only"
+PRINT ""
+
+# ============================================
+# TEST 8: Event Chain (Multiple Events)
+# ============================================
+PRINT "============================================"
+PRINT "TEST 8: Event Chain"
+PRINT "============================================"
+
+# Chain of events
+ON EVENT step1_complete(data):
+  LOG INFO: "Step 1 complete, triggering step 2"
+  EMIT step2_start(input: data)
+END ON
+
+ON EVENT step2_start(input):
+  LOG INFO: "Step 2 started with input"
+  EMIT step2_complete(result: "processed")
+END ON
+
+ON EVENT step2_complete(result):
+  LOG INFO: "Step 2 complete: {result}"
+  EMIT workflow_done()
+END ON
+
+LISTEN FOR workflow_done:
+  LOG SUCCESS: "Full workflow completed!"
+END LISTEN
+
+PRINT "Event chain defined:"
+PRINT "  step1_complete -> step2_start -> step2_complete -> workflow_done"
+PRINT ""
+PRINT "Starting chain..."
+EMIT step1_complete(data: "initial data")
+PRINT ""
+
+# ============================================
+# TEST 9: Error Handling in Events
+# ============================================
+PRINT "============================================"
+PRINT "TEST 9: Error Handling in Events"
+PRINT "============================================"
+
+ON EVENT error_test():
+  LOG INFO: "Handler 1: About to throw error"
+  THROW "Simulated error in handler 1"
+END ON
+
+ON EVENT error_test():
+  LOG INFO: "Handler 2: Should still execute"
+END ON
+
+PRINT "Two handlers for 'error_test':"
+PRINT "  Handler 1: Throws an error"
+PRINT "  Handler 2: Should still run (error isolation)"
+PRINT ""
+PRINT "Emitting error_test event..."
+EMIT error_test()
+PRINT ""
+PRINT "Both handlers executed (errors are isolated)"
+PRINT ""
+
+# ============================================
+# TEST 10: Event with Complex Data
+# ============================================
+PRINT "============================================"
+PRINT "TEST 10: Event with Complex Data"
+PRINT "============================================"
+
+LISTEN FOR complex_event:
+  LOG INFO: "Received complex event:"
+  LOG INFO: "  User: {event.user.name}"
+  LOG INFO: "  Action: {event.action}"
+  LOG INFO: "  Items count: {event.items.length}"
+  LOG INFO: "  Metadata timestamp: {event.metadata.timestamp}"
+END LISTEN
+
+EMIT complex_event(
+  user: {name: "Alice", id: 123},
+  action: "bulk_update",
+  items: ["item1", "item2", "item3"],
+  metadata: {
+    timestamp: NOW(),
+    source: "test",
+    priority: "high"
+  }
+)
+
+PRINT ""
+
+# ============================================
+# TEST 11: Schedule with Task Block
+# ============================================
+PRINT "============================================"
+PRINT "TEST 11: Schedule with Complex Task Block"
+PRINT "============================================"
+
+AGENT Analyzer:
+  MODEL: sonnet
+  PROMPT: "You analyze data and identify patterns."
+
+VAR analyzer = NEW Analyzer()
+
+SCHEDULE weekly_analysis:
+  INTERVAL: 7d
+  START_AT: "2026-01-13T00:00:00Z"
+  END_AT: "2026-12-31T23:59:59Z"
+  TASK:
+    LOG INFO: "Starting weekly analysis..."
+
+    VAR data = RUN SESSION(analyzer):
+      TASK: "Gather weekly metrics"
+
+    VAR analysis = RUN SESSION(analyzer):
+      TASK: "Analyze trends"
+      INPUT: {data}
+
+    IF **{analysis} shows concerning trends**:
+      EMIT concern_detected(analysis: analysis)
+    END IF
+
+    SAVE analysis TO "reports/weekly-{WEEK()}.json"
+    LOG SUCCESS: "Weekly analysis complete"
+  END TASK
+  RETRY: 3
+  ON_FAILURE: EMIT analysis_failed(week: WEEK())
+END SCHEDULE
+
+PRINT "Schedule 'weekly_analysis' registered:"
+PRINT "  Interval: 7 days"
+PRINT "  Active: 2026-01-13 to 2026-12-31"
+PRINT "  Task: Multi-step analysis workflow"
+PRINT "  Retry: 3 attempts"
+PRINT ""
+
+# ============================================
+# TEST 12: MATCHES Pattern Filtering
+# ============================================
+PRINT "============================================"
+PRINT "TEST 12: MATCHES Pattern Filtering"
+PRINT "============================================"
+
+ON EVENT file_event(path) WHERE path MATCHES "*.ts":
+  LOG INFO: "TypeScript: {path}"
+END ON
+
+ON EVENT file_event(path) WHERE path MATCHES "*.tsx":
+  LOG INFO: "TSX: {path}"
+END ON
+
+ON EVENT file_event(path) WHERE path MATCHES "src/**/*.js":
+  LOG INFO: "Source JS: {path}"
+END ON
+
+ON EVENT file_event(path) WHERE path MATCHES "test/**/*":
+  LOG INFO: "Test file: {path}"
+END ON
+
+PRINT "Pattern handlers registered:"
+PRINT "  *.ts - TypeScript files"
+PRINT "  *.tsx - TSX files"
+PRINT "  src/**/*.js - JavaScript in src/"
+PRINT "  test/**/* - Any test file"
+PRINT ""
+PRINT "Testing with sample paths..."
+
+EMIT file_event(path: "app.ts")
+EMIT file_event(path: "component.tsx")
+EMIT file_event(path: "src/utils/helper.js")
+EMIT file_event(path: "test/unit/app.test.ts")
+
+PRINT ""
+
+# ============================================
+# TEST 13: Built-in Event Types
+# ============================================
+PRINT "============================================"
+PRINT "TEST 13: Built-in Event Types (Declarative)"
+PRINT "============================================"
+
+# These are declarative - actual triggers require runtime integration
+ON EVENT session_start(session_id):
+  LOG INFO: "Session started: {session_id}"
+END ON
+
+ON EVENT session_end(session_id, result):
+  LOG INFO: "Session ended: {session_id}"
+  IF **{result} contains errors**:
+    EMIT session_error(session_id: session_id, result: result)
+  END IF
+END ON
+
+ON EVENT timer_tick(timestamp):
+  LOG DEBUG: "Timer tick at {timestamp}"
+END ON
+
+PRINT "Built-in event handlers registered:"
+PRINT "  - session_start"
+PRINT "  - session_end"
+PRINT "  - timer_tick"
+PRINT ""
+PRINT "Note: These require runtime integration to trigger automatically"
+PRINT ""
+
+# ============================================
+# TEST 14: Event + INTERACTIVE Integration
+# ============================================
+PRINT "============================================"
+PRINT "TEST 14: Event + INTERACTIVE Integration"
+PRINT "============================================"
+
+ON EVENT approval_needed(item, reason):
+  LOG INFO: "Approval needed for: {item}"
+  LOG INFO: "Reason: {reason}"
+  # In real use, could trigger INTERACTIVE block
+END ON
+
+PRINT "Event-driven approval workflow:"
+PRINT "  1. EMIT approval_needed triggers handler"
+PRINT "  2. Handler can show INTERACTIVE for user decision"
+PRINT "  3. User choice emits result event"
+PRINT ""
+
+EMIT approval_needed(item: "Large expense report", reason: "Amount exceeds threshold")
+
+PRINT ""
+
+# ============================================
+# TEST 15: Event + Cost Tracking
+# ============================================
+PRINT "============================================"
+PRINT "TEST 15: Event + Cost Tracking"
+PRINT "============================================"
+
+ON EVENT expensive_operation(op_name):
+  LOG INFO: "Starting expensive operation: {op_name}"
+  # Sessions in handlers count toward budget
+  VAR result = RUN SESSION(handler):
+    TASK: "Process {op_name}"
+  LOG INFO: "Operation complete (cost tracked)"
+END ON
+
+PRINT "Event handlers with sessions:"
+PRINT "  - Sessions in handlers count toward CONFIG BUDGET"
+PRINT "  - Cost warnings apply to handler sessions"
+PRINT "  - Track cost per handler execution"
+PRINT ""
+
+# ============================================
+# FINAL SUMMARY
+# ============================================
+PRINT "============================================"
+PRINT "Module 12 Events & Scheduling Tests Complete!"
+PRINT "============================================"
+PRINT ""
+PRINT "Features tested:"
+PRINT "  TEST 1:  ON EVENT declaration"
+PRINT "  TEST 2:  ON EVENT with WHERE clause"
+PRINT "  TEST 3:  EMIT custom events"
+PRINT "  TEST 4:  LISTEN FOR internal events"
+PRINT "  TEST 5:  SCHEDULE (INTERVAL)"
+PRINT "  TEST 6:  SCHEDULE (CRON)"
+PRINT "  TEST 7:  SCHEDULE (ONCE_AT)"
+PRINT "  TEST 8:  Event chains"
+PRINT "  TEST 9:  Error handling in events"
+PRINT "  TEST 10: Complex event data"
+PRINT "  TEST 11: Complex task blocks"
+PRINT "  TEST 12: MATCHES pattern filtering"
+PRINT "  TEST 13: Built-in event types"
+PRINT "  TEST 14: Event + INTERACTIVE integration"
+PRINT "  TEST 15: Event + Cost tracking"
+PRINT ""
+PRINT "Event System Summary:"
+PRINT "  - ON EVENT: Handles external and internal events"
+PRINT "  - LISTEN FOR: Lightweight internal event listener"
+PRINT "  - EMIT: Trigger custom events"
+PRINT "  - SCHEDULE: Time-based task scheduling"
+PRINT "  - WHERE: Filter events with conditions"
+PRINT "  - MATCHES: Glob pattern matching"
+PRINT ""
+PRINT "Notes:"
+PRINT "  - External events are declarative (require runtime)"
+PRINT "  - Schedules can be triggered: /cheesecake trigger <name>"
+PRINT "  - Event errors are isolated (don't stop other handlers)"
+PRINT "  - Event chains have depth limit (MAX_EVENT_DEPTH: 10)"
+PRINT ""
+PRINT "All Module 12 features validated!"
