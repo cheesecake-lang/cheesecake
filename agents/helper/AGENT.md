@@ -6,7 +6,7 @@ skills:
   - cheesecake/helper
   - cheesecake/SKILL
   - cheesecake/syntax-reference
-model: sonnet
+model: opus
 ---
 
 # CheeseCake Helper Agent

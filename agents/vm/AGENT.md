@@ -16,7 +16,7 @@
 name: cheesecake-vm
 description: CheeseCake Virtual Machine - executes .cheesecake workflow files
 tools: Task, Read, Write, Glob, Grep
-model: sonnet
+model: opus
 ---
 
 # Role
