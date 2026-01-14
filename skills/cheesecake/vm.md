@@ -1,10 +1,11 @@
 # CheeseCake VM Execution Semantics
 # Purpose: Define how AI agents execute .cheesecake programs
 # Part of: CheeseCake v0.0.1 - Module 3 (VM Execution Engine)
-# Updated: v0.0.2 - Added INTERACTIVE (Module 10), Cost Management (Module 11), Events & Scheduling (Module 12)
+# Updated: v0.0.2 - Added INTERACTIVE (M10), Cost Management (M11), Events (M12), Testing (M13), Program Contracts
 #
-# This file explains the runtime behavior of the CheeseCake VM.
-# You (the AI) ARE the VM when executing .cheesecake files.
+# IMPORTANT: You (the AI) ARE the CheeseCake VM.
+# This is not a metaphor. When you read and execute a .cheesecake file,
+# you are not simulating execution—you ARE executing it.
 #
 # Usage:
 #   Referenced by SKILL.md for execution behavior
@@ -12,9 +13,11 @@
 #
 # Dependencies:
 #   - SKILL.md (language specification)
+#   - philosophy.md (foundational execution philosophy)
 #   - Claude Code Task tool (for spawning sessions)
 #
 # Related:
+#   - philosophy.md (understand WHY you are the VM)
 #   - AGENT.md in agents/vm/ (VM agent definition)
 
 ---
@@ -23,15 +26,21 @@
 
 ## Overview
 
-When you execute a `.cheesecake` file, **you are the CheeseCake VM**. This document defines how you should behave as the interpreter and execution coordinator.
+**You are not simulating a virtual machine. You ARE the virtual machine.**
+
+When you execute a `.cheesecake` file, the sessions you spawn are real. The state you track is real. The outputs you produce are real. The distinction between "an AI interpreting code" and "a VM running code" does not exist—they are the same thing.
+
+For the complete philosophical foundation, see `philosophy.md`.
 
 ### Core Principles
 
-1. **Session-as-Runtime**: The AI session executing the .cheesecake file IS the VM
-2. **Sub-agent Spawning**: Use Claude Code's `Task` tool to create sessions for each agent
-3. **Intelligent Coordination**: Apply AI understanding to coordinate execution
-4. **State Management**: Track variables, checkpoints, and memory
-5. **Progressive Execution**: Execute statements sequentially unless explicitly parallel
+1. **You ARE the VM**: Not simulating—actually executing. Your context is working memory. Your tool calls are instruction execution.
+2. **Real Sessions**: Use the Task tool to spawn real subagent sessions. These are not simulations.
+3. **Two Execution Modes**:
+   - **Strict Mode**: Most code executes exactly as written, no interpretation
+   - **Semantic Mode**: `**...**` conditions explicitly delegate judgment to your understanding
+4. **Real State**: Variables exist in your working memory. Checkpoints persist to real files.
+5. **Sequential by Default**: Execute statements in order unless explicitly in a PARALLEL block
 
 ---
 
@@ -1498,7 +1507,732 @@ For VM implementers:
 
 ---
 
-## 11. Error Handling
+## 11. Test Execution (v0.0.2+)
+
+This section defines how the VM executes tests. See `testing.md` for complete specification.
+
+### Test Discovery
+
+When `/cheesecake test` is run:
+
+```
+1. Scan specified file(s) for TEST SUITE and TEST blocks
+2. Build test registry:
+   TestRegistry = {
+     suites: [
+       {
+         name: "Workflow Tests",
+         setup: setupBlock | null,
+         teardown: teardownBlock | null,
+         tests: [
+           {name: "test case 1", body: testBlock},
+           {name: "test case 2", body: testBlock}
+         ]
+       }
+     ],
+     standaloneTests: [
+       {name: "standalone test", body: testBlock}
+     ]
+   }
+3. Report discovered tests:
+   "Found 2 suites, 5 tests"
+```
+
+### Test Execution Protocol
+
+For each test:
+
+```
+execute_test(test, suite):
+  1. Create isolated test scope
+  2. Initialize empty mock registry for this test
+  3. If suite has SETUP:
+     - Execute setup in test scope
+  4. Execute test body:
+     - Process MOCK declarations → add to mock registry
+     - Process statements normally
+     - On RUN SESSION → check mock registry first
+     - On ASSERT → evaluate and check
+  5. If suite has TEARDOWN:
+     - Execute teardown (even if test failed)
+  6. Record result (PASS/FAIL/ERROR)
+  7. Cleanup test scope and mock registry
+```
+
+### Mock Registry Management
+
+```
+MockRegistry = {
+  "AgentName": {
+    default: returnValue | null,
+    throws: errorMessage | null,
+    patterns: [
+      {pattern: "*article*", returns: value1},
+      {pattern: "*summary*", returns: value2}
+    ]
+  }
+}
+```
+
+**Adding Mocks:**
+
+```cheesecake
+MOCK Agent RETURNS value
+```
+
+```
+→ MockRegistry["Agent"] = {default: value, throws: null, patterns: []}
+```
+
+```cheesecake
+MOCK Agent FOR TASK MATCHING "pattern" RETURNS value
+```
+
+```
+→ MockRegistry["Agent"].patterns.push({pattern: "pattern", returns: value})
+```
+
+```cheesecake
+MOCK Agent THROWS "error"
+```
+
+```
+→ MockRegistry["Agent"] = {default: null, throws: "error", patterns: []}
+```
+
+### Mock Resolution
+
+When `RUN SESSION(agent): TASK: "..."` is encountered:
+
+```
+resolve_mock(agent_name, task):
+  1. Look up agent_name in MockRegistry
+  2. If not found:
+     - In strict mode: FAIL test ("Unmocked session")
+     - In permissive mode: run real session (warning)
+  3. If found:
+     a. If mock.throws is set:
+        - Raise error with mock.throws message
+     b. Check patterns in order:
+        - If task matches pattern, return pattern.returns
+     c. If no pattern matched:
+        - Return mock.default
+  4. Return resolved value (no actual AI call made)
+```
+
+### Pattern Matching
+
+Glob-style matching for task patterns:
+
+```
+match_pattern(task, pattern):
+  "*"           → matches any task
+  "*article*"   → matches if "article" anywhere in task
+  "Write *"     → matches if task starts with "Write "
+  "* report"    → matches if task ends with " report"
+  "Analyze *"   → matches if task starts with "Analyze "
+```
+
+### ASSERT Execution
+
+When ASSERT is encountered:
+
+```
+execute_assert(condition, message):
+  1. Evaluate condition:
+     - Literal: direct evaluation (==, !=, >, CONTAINS, etc.)
+     - Semantic (**...**): AI evaluation
+  2. If condition is TRUE:
+     - Record PASS for this assertion
+     - Continue to next statement
+  3. If condition is FALSE:
+     - Record assertion failure:
+       {
+         assertion: "ASSERT x == y",
+         expected: y,
+         actual: x,
+         line: lineNumber,
+         message: customMessage | null
+       }
+     - Mark test as FAILED
+     - Stop test execution (first failure stops test)
+```
+
+### Semantic ASSERT Evaluation
+
+For `ASSERT **{variable} meets condition**`:
+
+```
+1. Format prompt for AI evaluation:
+   "Evaluate whether the following is TRUE or FALSE:
+    {variable_content} meets condition
+
+    Respond with only TRUE or FALSE."
+2. Get AI response
+3. Parse TRUE/FALSE
+4. Return boolean result
+```
+
+### Test Result Recording
+
+```
+TestResult = {
+  suite: "Suite Name" | null,
+  name: "Test Name",
+  status: "PASS" | "FAIL" | "ERROR" | "SKIP",
+  duration: 0.15,  // seconds
+  assertions: {
+    total: 5,
+    passed: 4,
+    failed: 1
+  },
+  failure: {
+    assertion: "ASSERT x == y",
+    expected: "y",
+    actual: "x",
+    line: 42,
+    message: "Custom message"
+  } | null,
+  error: {
+    type: "RuntimeError",
+    message: "Error message",
+    line: 38
+  } | null
+}
+```
+
+### Test Output Protocol
+
+**Summary (default):**
+
+```
+execute_tests():
+  For each suite:
+    Print "TEST SUITE: {suite.name}"
+    For each test in suite:
+      result = execute_test(test, suite)
+      If PASS:
+        Print "  ✓ {test.name} ({duration}s)"
+      Else:
+        Print "  ✗ {test.name} ({duration}s)"
+        Print "    FAILED: {failure.assertion}"
+        Print "    Expected: {failure.expected}"
+        Print "    Actual: {failure.actual}"
+
+  Print summary:
+    "Tests: {total}, Passed: {passed}, Failed: {failed}"
+    "Time: {totalTime}s"
+```
+
+**Verbose:**
+
+```
+  TEST: test name
+    MOCK: Agent → {value}
+    EXECUTE: VAR x = ...
+    EXECUTE: RUN SESSION(agent)... → Using mock
+    ASSERT x IS NOT NULL: PASS
+    ASSERT **{x} is valid**: PASS (AI confidence: 0.92)
+    ✓ PASSED (0.05s)
+```
+
+### Integration with Other Features
+
+**With SETUP/TEARDOWN:**
+- SETUP runs before each test, in test scope
+- TEARDOWN runs after each test, even on failure
+- Variables from SETUP available in test
+
+**With Cost Management:**
+- Mocked sessions cost $0
+- Real sessions (if allowed) count toward budget
+- Test mode can set BUDGET: $0 to enforce all mocks
+
+**With Events:**
+- EMIT in tests dispatches to handlers
+- Handlers can be tested via side effects
+
+**With Checkpoints:**
+- Tests can verify checkpoint save/restore behavior
+
+### VM Implementation Checklist
+
+For VM implementers:
+
+- [ ] Parse TEST SUITE blocks
+- [ ] Parse TEST blocks (in suite and standalone)
+- [ ] Build test registry during parse
+- [ ] Implement MOCK statement parsing
+- [ ] Build mock registry per test
+- [ ] Implement mock resolution for RUN SESSION
+- [ ] Implement pattern matching for task mocks
+- [ ] Parse ASSERT statements
+- [ ] Implement literal assertion evaluation
+- [ ] Implement semantic assertion evaluation
+- [ ] Record test results
+- [ ] Execute SETUP/TEARDOWN around tests
+- [ ] Generate test output (summary and verbose)
+- [ ] Track test timing
+- [ ] Support --fail-fast option
+
+---
+
+## 12. Program Contracts & Composition (v0.0.2+)
+
+This section defines how the VM handles INPUT/OUTPUT contracts and program-to-program composition via USE.
+
+### Contract Parsing
+
+During the PARSE phase, the VM extracts contracts from programs:
+
+```
+ProgramContract = {
+  inputs: [
+    {name: "topic", description: "The subject to research", required: true, default: null},
+    {name: "depth", description: "Research depth", required: false, default: "medium"}
+  ],
+  outputs: [
+    {name: "findings", expression: "synthesis"},
+    {name: "sources", expression: "source_list"}
+  ]
+}
+```
+
+**Parsing Rules:**
+
+1. **INPUT declarations** must appear at top of file, before executable code
+2. **OUTPUT declarations** can appear anywhere (typically at end)
+3. **INPUT names** become available as variables in program scope
+4. **OUTPUT names** must be unique within a program
+
+### USE Statement Execution
+
+When VM encounters a USE statement:
+
+```cheesecake
+USE "./research-workflow.cheesecake" AS research
+USE "@workflows/web-researcher" AS external_research
+```
+
+**VM Behavior:**
+
+```
+1. Determine source type:
+   - If path starts with "./" or "/" → LOCAL file
+   - If path starts with "@" → REGISTRY import
+
+2. For LOCAL imports:
+   2a. Resolve filesystem path relative to current file
+   2b. Read file contents from disk
+   2c. Parse syntax and extract contract
+
+3. For REGISTRY imports:
+   3a. Parse path: "@handle/slug" → handle="alice", slug="research"
+   3b. Check cache first:
+       cache_path = ".cheesecake/cache/@{handle}/{slug}"
+       If cached AND not expired (TTL: 24h):
+         Load from cache
+       Else:
+         Fetch from registry
+   3c. Fetch from registry:
+       url = "https://registry.cheesecake.dev/@{handle}/{slug}"
+       response = HTTP_GET(url, headers: {
+         "Accept": "text/x-cheesecake",
+         "User-Agent": "CheeseCake-VM/0.0.2"
+       })
+       If response.status == 404:
+         ERROR "Program @{handle}/{slug} not found in registry"
+       If response.status != 200:
+         If cached version exists:
+           WARN "Registry unavailable, using cached version"
+           Load from cache
+         Else:
+           ERROR "Failed to fetch @{handle}/{slug}: {response.status}"
+   3d. Cache the response:
+       Write to ".cheesecake/cache/@{handle}/{slug}"
+       Record timestamp and version
+
+4. Parse the target program:
+   - Parse syntax
+   - Extract contract (INPUT/OUTPUT declarations)
+   - Validate CheeseCake syntax
+
+5. Register in ImportRegistry:
+   ImportRegistry["web-researcher"] = {
+     source: "@workflows/web-researcher" OR "./local-file.cheesecake",
+     source_type: "REGISTRY" OR "LOCAL",
+     resolved_url: "https://registry.cheesecake.dev/@workflows/web-researcher" OR null,
+     contract: {
+       inputs: [
+         {name: "topic", description: "...", required: true, default: null},
+         {name: "depth", description: "...", required: false, default: "medium"}
+       ],
+       outputs: ["findings", "sources", "metadata"]
+     },
+     parsed_program: <AST>,
+     cached_at: timestamp,
+     version: "1.0.0" (from registry) OR null
+   }
+
+6. Validate contract:
+   - Ensure at least one INPUT or OUTPUT defined
+   - Warn if no contract found (program may not be designed for composition)
+```
+
+### Registry Cache Management
+
+```
+Cache Structure:
+.cheesecake/
+  cache/
+    @workflows/
+      web-researcher           # Cached program content
+      web-researcher.meta      # Metadata (timestamp, version, etag)
+    @stdlib/
+      text-utils
+      text-utils.meta
+
+Cache Meta Format:
+{
+  "source": "@workflows/web-researcher",
+  "fetched_at": "2026-01-14T10:30:00Z",
+  "expires_at": "2026-01-15T10:30:00Z",
+  "version": "1.2.0",
+  "etag": "abc123"
+}
+```
+
+**Force Refresh:**
+
+```cheesecake
+USE "@workflows/web-researcher" REFRESH  # Bypass cache, fetch fresh
+```
+
+**VM Behavior for REFRESH:**
+```
+1. Ignore cache
+2. Fetch directly from registry
+3. Update cache with new content
+4. Register program
+```
+
+### Program Invocation
+
+When VM encounters `RUN program_name(args)`:
+
+```cheesecake
+VAR result = RUN research(topic: "quantum", depth: "deep")
+```
+
+**VM Behavior:**
+
+```
+1. Look up program in UseRegistry:
+   program = UseRegistry["research"]
+   If not found: ERROR "Unknown program 'research'. Did you USE it?"
+
+2. Validate inputs:
+   For each input in program.contract.inputs:
+     If input.required AND input.name NOT in args:
+       ERROR "Missing required input: {input.name}"
+
+3. Apply defaults:
+   For each input in program.contract.inputs:
+     If input.name NOT in args AND input.default != null:
+       args[input.name] = input.default
+
+4. Create execution context:
+   program_context = {
+     variables: {},        # Fresh scope
+     parent: null,         # Isolated from caller
+     inputs: args          # Provided inputs
+   }
+
+5. Bind inputs as variables:
+   For each (name, value) in args:
+     program_context.variables[name] = value
+
+6. Execute program:
+   - Execute all statements in program
+   - Track OUTPUT declarations as they execute
+
+7. Collect outputs:
+   result = {}
+   For each output in program.contract.outputs:
+     result[output.name] = evaluate(output.expression, program_context)
+
+8. Return result object:
+   Return result to caller
+```
+
+### Contract Validation Examples
+
+**Missing Required Input:**
+
+```cheesecake
+# research.cheesecake has: INPUT topic: "..." (required)
+VAR result = RUN research()  # ERROR: Missing required input: topic
+```
+
+**Unknown Input:**
+
+```cheesecake
+# research.cheesecake has: INPUT topic: "...", INPUT depth: "..."
+VAR result = RUN research(topic: "AI", unknown: "value")
+# WARNING: Unknown input 'unknown' ignored
+```
+
+**Using Default:**
+
+```cheesecake
+# research.cheesecake has: INPUT depth: "..." DEFAULT: "medium"
+VAR result = RUN research(topic: "AI")  # depth = "medium" (default)
+```
+
+### Output Collection
+
+When OUTPUT statement executes:
+
+```cheesecake
+OUTPUT findings = synthesis
+OUTPUT metadata = {topic: topic, timestamp: NOW()}
+```
+
+**VM Behavior:**
+
+```
+1. Evaluate the expression on the right side
+2. Store in output registry:
+   OutputRegistry["findings"] = <value of synthesis>
+   OutputRegistry["metadata"] = {topic: ..., timestamp: ...}
+3. Continue execution (OUTPUT doesn't stop program)
+```
+
+### Destructuring Assignment
+
+When VM encounters a destructuring assignment:
+
+```cheesecake
+VAR { findings, sources } = RUN research(topic: "quantum")
+VAR { findings AS data, sources AS refs } = RUN research(topic: "AI")
+```
+
+**VM Behavior:**
+
+```
+1. Execute the RUN expression:
+   result = RUN research(topic: "quantum")
+   # result = {findings: "...", sources: [...], metadata: {...}}
+
+2. Parse destructuring pattern:
+   For "{ findings, sources }":
+     names = [
+       {target: "findings", source: "findings"},
+       {target: "sources", source: "sources"}
+     ]
+
+   For "{ findings AS data, sources AS refs }":
+     names = [
+       {target: "data", source: "findings"},
+       {target: "refs", source: "sources"}
+     ]
+
+3. Extract and bind values:
+   For each {target, source} in names:
+     If source NOT in result:
+       WARN "Output '{source}' not found in program result"
+       variables[target] = NULL
+     Else:
+       variables[target] = result[source]
+
+4. Result:
+   # For { findings, sources }:
+   variables["findings"] = result.findings
+   variables["sources"] = result.sources
+
+   # For { findings AS data, sources AS refs }:
+   variables["data"] = result.findings
+   variables["refs"] = result.sources
+```
+
+**Destructuring Syntax:**
+
+```
+Pattern              Example                              Result
+──────────────────────────────────────────────────────────────────────
+Simple               { a, b }                             a = result.a, b = result.b
+Rename               { a AS x, b AS y }                   x = result.a, y = result.b
+Partial              { a }                                a = result.a (b ignored)
+Mixed                { a, b AS y }                        a = result.a, y = result.b
+```
+
+**Error Handling:**
+
+```cheesecake
+# If output doesn't exist
+VAR { nonexistent } = RUN research(topic: "AI")
+# WARN: Output 'nonexistent' not found in program result
+# nonexistent = NULL
+
+# If RUN fails
+TRY:
+  VAR { findings } = RUN risky_program(input: data)
+CATCH error:
+  # Destructuring not executed, error caught
+END TRY
+```
+
+### Nested Program Calls
+
+Programs can call other programs:
+
+```cheesecake
+# program-a.cheesecake
+USE "./program-b.cheesecake" AS b
+VAR result = RUN b(input: data)
+
+# program-b.cheesecake
+USE "./program-c.cheesecake" AS c
+VAR result = RUN c(input: data)
+```
+
+**VM Behavior:**
+
+```
+1. Track call depth:
+   MAX_PROGRAM_DEPTH = 10
+
+2. Before each RUN program():
+   If current_depth >= MAX_PROGRAM_DEPTH:
+     ERROR "Maximum program nesting depth exceeded"
+   current_depth++
+
+3. After RUN program() completes:
+   current_depth--
+```
+
+### Error Handling in Program Calls
+
+```cheesecake
+TRY:
+  VAR result = RUN program(input: data)
+CATCH error:
+  # error.type = "ProgramError"
+  # error.program = "program"
+  # error.message = <error from program>
+  # error.line = <line in program where error occurred>
+END TRY
+```
+
+**Error Propagation:**
+- Errors in called programs propagate to caller
+- Caller can catch and handle
+- Uncaught errors stop execution
+
+### Parallel Program Execution
+
+```cheesecake
+PARALLEL:
+  VAR r1 = RUN research(topic: "AI")
+  VAR r2 = RUN research(topic: "ML")
+END PARALLEL
+```
+
+**VM Behavior:**
+- Each program runs in isolated context
+- All run concurrently
+- Results collected when all complete
+- Each program gets its own variable scope
+
+### Cost Tracking Integration
+
+Program calls count toward budget:
+
+```cheesecake
+CONFIG:
+  BUDGET: $1.00
+END CONFIG
+
+# If research.cheesecake runs 3 sessions internally,
+# those 3 sessions count toward $1.00 budget
+VAR result = RUN research(topic: "AI")
+```
+
+### Progress Display Integration
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Running: main.cheesecake                           │
+│                                                     │
+│  [■■■■□□□□□□] 40% complete                         │
+│                                                     │
+│  ✓ Phase 1: Setup                  [DONE]          │
+│  → Phase 2: Research               [RUNNING]       │
+│    └→ research.cheesecake          [RUNNING]       │
+│       ├─ Session 1: Research       [DONE]          │
+│       └─ Session 2: Synthesis      [RUNNING]       │
+│  ○ Phase 3: Output                 [PENDING]       │
+└─────────────────────────────────────────────────────┘
+```
+
+### VM Implementation Checklist
+
+For program composition to work, the VM must:
+
+**Contract Parsing:**
+- [ ] Parse INPUT declarations at top of file
+- [ ] Parse OUTPUT declarations anywhere in file
+- [ ] Build ProgramContract during parse
+- [ ] Validate contract structure
+
+**USE Statement (Local):**
+- [ ] Handle USE statements with local paths (./, /)
+- [ ] Resolve paths relative to current file
+- [ ] Load and parse local .cheesecake files
+- [ ] Build ImportRegistry during execution
+
+**USE Statement (Registry):**
+- [ ] Handle USE statements with registry paths (@handle/slug)
+- [ ] Parse @handle/slug format
+- [ ] Check local cache first (.cheesecake/cache/)
+- [ ] Fetch from registry URL (https://registry.cheesecake.dev/@...)
+- [ ] Handle HTTP errors (404, network failures)
+- [ ] Fall back to cache on network errors
+- [ ] Cache fetched programs with metadata
+- [ ] Support REFRESH keyword to bypass cache
+- [ ] Track cache TTL (24 hours default)
+
+**Program Invocation:**
+- [ ] Look up program in ImportRegistry
+- [ ] Validate inputs on RUN program()
+- [ ] Apply default values for optional inputs
+- [ ] Create isolated execution context for programs
+- [ ] Bind inputs as variables
+- [ ] Execute program in isolated context
+- [ ] Collect OUTPUT values
+- [ ] Return outputs as result object
+
+**Destructuring:**
+- [ ] Parse destructuring pattern { a, b }
+- [ ] Parse renamed destructuring { a AS x }
+- [ ] Extract values from result object
+- [ ] Warn on missing output names
+- [ ] Bind destructured values to variables
+
+**Safety & Error Handling:**
+- [ ] Track call depth (MAX_PROGRAM_DEPTH = 10)
+- [ ] Prevent infinite recursion
+- [ ] Propagate errors from called programs
+- [ ] Support TRY/CATCH for program calls
+
+**Integration:**
+- [ ] Integrate with cost tracking (sessions in called programs count)
+- [ ] Show nested programs in progress display
+- [ ] Support parallel program execution
+
+---
+
+## 13. Error Handling
 
 ### Try/Catch
 
@@ -1548,7 +2282,7 @@ VAR data = RUN SESSION(agent):
 
 ---
 
-## 12. Context Passing
+## 14. Context Passing
 
 ### Between Sessions
 
@@ -1575,7 +2309,7 @@ VAR article = RUN SESSION(writer):
 
 ---
 
-## 13. Function Calls
+## 15. Function Calls
 
 ### Execution
 
@@ -1601,7 +2335,7 @@ VAR output = CALL research_topic(topic: "quantum computing")
 
 ---
 
-## 14. Import/Export
+## 16. Import/Export
 
 ### Import
 
@@ -1619,7 +2353,7 @@ VAR agent = NEW lib.Researcher()
 
 ---
 
-## 15. Progress Reporting
+## 17. Progress Reporting
 
 ### Reporting Format
 
@@ -1648,7 +2382,7 @@ During execution, report progress to user:
 
 ---
 
-## 16. Special Behaviors
+## 18. Special Behaviors
 
 ### Semantic Inference
 
@@ -1671,7 +2405,7 @@ When passing multiple variables as INPUT, intelligently format them for readabil
 
 ---
 
-## 17. Error Messages
+## 19. Error Messages
 
 Provide clear, actionable error messages:
 
@@ -1693,7 +2427,7 @@ Error: undefined variable
 
 ---
 
-## 18. Complete Execution Example
+## 20. Complete Execution Example
 
 ### Input File: `workflow.cheesecake`
 

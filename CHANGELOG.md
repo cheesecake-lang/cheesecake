@@ -509,10 +509,273 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+#### Module 13: Testing Framework ✅ COMPLETE
+
+**TEST SUITE Construct**
+- Groups related tests with shared setup/teardown
+- Syntax: `TEST SUITE "name": ... END TEST SUITE`
+- SETUP block runs before each test
+- TEARDOWN block runs after each test (even on failure)
+- Multiple tests per suite, execution in order
+
+**TEST Construct**
+- Individual test cases
+- Syntax: `TEST "name": ... END TEST`
+- Isolated scope per test
+- First failed ASSERT stops test
+- Can be standalone or inside suite
+
+**MOCK Construct**
+- Replace agent sessions with fixed responses
+- Syntax variations:
+  - `MOCK Agent RETURNS value` - Simple mock
+  - `MOCK Agent FOR TASK MATCHING "pattern" RETURNS value` - Task-specific
+  - `MOCK Agent THROWS "error"` - Error simulation
+- Pattern matching: `*`, `*keyword*`, `prefix *`, `* suffix`
+- Mock scope limited to current TEST block
+- Zero cost (no AI calls)
+
+**ASSERT Construct**
+- Verify conditions in tests
+- Literal assertions:
+  - `==`, `!=`, `>`, `<`, `>=`, `<=`
+  - `IS NULL`, `IS NOT NULL`
+  - `IS TRUE`, `IS FALSE`
+  - `CONTAINS`, `MATCHES`
+- Semantic assertions: `ASSERT **{value} is quality check**`
+- Custom messages: `ASSERT condition MESSAGE "text"`
+
+**/cheesecake test Command**
+- Run tests: `/cheesecake test [file] [options]`
+- Options: `--suite`, `--test`, `--verbose`, `--fail-fast`, `--strict`
+- Output formats: text (default), json, junit
+- Test discovery and execution
+- Pass/fail reporting with details
+
+**Documentation**
+- `skills/cheesecake/testing.md` - 750+ lines of specification
+- `skills/cheesecake/SKILL.md` - Added Testing Framework (section 13, 155+ lines)
+- `skills/cheesecake/vm.md` - Added Test Execution (section 11, 270+ lines)
+- `commands/cheesecake-test.md` - 200+ lines for test command
+- `test-testing-framework.cheesecake` - 400+ lines testing all features
+- Total new documentation: 1,775+ lines
+
+**Examples**
+- Basic test suites with setup/teardown
+- Simple and task-specific mocks
+- Error simulation with MOCK THROWS
+- All assertion operators
+- Semantic quality assertions
+- Test isolation verification
+- Integration test patterns
+
+### Testing (Module 13)
+- Tested TEST SUITE declaration ✅
+- Tested SETUP/TEARDOWN ✅
+- Tested simple MOCK ✅
+- Tested task-specific MOCK patterns ✅
+- Tested MOCK THROWS ✅
+- Tested literal ASSERT operators ✅
+- Tested semantic ASSERT ✅
+- Tested custom ASSERT MESSAGE ✅
+- Tested multiple mocks ✅
+- Tested test isolation ✅
+- Tested standalone TEST ✅
+- Tested nested data assertions ✅
+- Tested error handling in tests ✅
+- Tested loops in tests ✅
+- Validated 15 test scenarios ✅
+
+### Changed (Module 13)
+- `SKILL.md` sections renumbered (14-20, was 13-19)
+- `vm.md` sections renumbered (12-19, was 11-18)
+- Added Testing Framework as section 13 in SKILL.md
+- Added Test Execution as section 11 in vm.md
+- Added /cheesecake test command
+
+### Backward Compatibility (Module 13)
+- ✅ All v0.0.1 and v0.0.2 workflows continue to work
+- Testing constructs are optional
+- Existing workflows without tests work perfectly
+- No breaking changes to syntax
+
+---
+
+#### Program Contracts & Composition ✅ COMPLETE
+
+**INPUT Declaration**
+- Declare expected inputs for reusable programs
+- Syntax: `INPUT name: "description"` (required)
+- Syntax: `INPUT name: "description" DEFAULT: value` (optional)
+- Supports all types: strings, numbers, booleans, arrays, objects
+- INPUTs become variables available in program scope
+- Contract validation at call time:
+  - Missing required input → ERROR
+  - Unknown input → WARNING (ignored)
+  - Missing optional → Uses DEFAULT value
+
+**OUTPUT Declaration**
+- Declare returned values from programs
+- Syntax: `OUTPUT name = expression`
+- Multiple outputs supported
+- Outputs collected into result object
+- Caller accesses via dot notation: `result.name`
+
+**USE Statement**
+- Import programs for composition
+- Local path: `USE "./path/to/program.cheesecake" AS alias`
+- Registry: `USE "@handle/slug"` or `USE "@namespace/program-name" AS alias`
+- Creates alias in current scope
+- Can USE multiple programs
+- Path resolution: relative to current file (local) or from registry (remote)
+
+**Registry URL Resolution**
+- Registry path format: `@<handle>/<slug>`
+- Resolution URL: `https://registry.cheesecake.dev/@handle/slug`
+- Resolution steps:
+  1. Parse @handle/slug
+  2. Check local cache first
+  3. Fetch from registry if not cached/expired
+  4. Parse and validate program
+  5. Register in ImportRegistry
+
+**Registry Caching**
+- Cache location: `.cheesecake/cache/@handle/slug`
+- Cache metadata: timestamp, version, etag
+- Default TTL: 24 hours
+- Falls back to cache on network errors
+- Force refresh: `USE "@workflows/web-researcher" REFRESH`
+
+**Destructuring Outputs**
+- Standard: `VAR result = RUN program(...)`
+- Destructured: `VAR { findings, sources } = RUN program(...)`
+- With rename: `VAR { findings AS data } = RUN program(...)`
+- Partial: `VAR { findings } = RUN program(...)`
+
+**Import Registry**
+- VM maintains ImportRegistry tracking all USE'd programs
+- Stores: source, source_type (LOCAL/REGISTRY), contract, cached_at, version
+- Helper functions: `HAS_IMPORT("name")`, `GET_INPUTS("name")`, `GET_OUTPUTS("name")`
+
+**Program Invocation**
+- Call imported programs with RUN
+- Syntax: `VAR result = RUN program_name(input1: value1, input2: value2)`
+- Named arguments required
+- Returns object with OUTPUT properties
+- Access outputs: `result.findings`, `result.metadata.generated`
+
+**Parallel Program Execution**
+- Programs can run in parallel
+- Syntax: `PARALLEL: VAR r1 = RUN prog(a: 1) VAR r2 = RUN prog(a: 2) END PARALLEL`
+- All results available after block completes
+
+**Program Composition Patterns**
+- Chain programs: output of one → input of another
+- Nested invocation with depth tracking
+- MAX_PROGRAM_DEPTH: 10 (prevents infinite recursion)
+- Error handling with TRY/CATCH
+
+**IMPORT vs USE**
+- IMPORT: Include code definitions (agents, skills, functions)
+- USE: Call complete programs with contracts
+- Both can be used together in same workflow
+
+**Documentation**
+- `skills/cheesecake/SKILL.md` - Added Section 3: Program Contracts (160+ lines)
+- `skills/cheesecake/SKILL.md` - Updated Section 17: Modules, Imports & Composition (350+ lines)
+- `skills/cheesecake/vm.md` - Added Section 12: Program Contracts & Composition (450+ lines)
+- `test-program-contracts.cheesecake` - 610 lines testing all features
+- Total new documentation: 1,570+ lines
+
+**Test Coverage (24 tests)**
+- TEST 1: INPUT declaration (required)
+- TEST 2: INPUT declaration (optional with DEFAULT)
+- TEST 3: OUTPUT declaration
+- TEST 4: Multiple INPUT types
+- TEST 5: USE statement (local path)
+- TEST 6: USE statement (registry path)
+- TEST 7: Program invocation syntax
+- TEST 8: Accessing program outputs
+- TEST 9: Parallel program execution
+- TEST 10: Program composition chain
+- TEST 11: Error handling in program calls
+- TEST 12: Contract validation
+- TEST 13: INPUT as variables
+- TEST 14: Complete program example
+- TEST 15: USE vs IMPORT comparison
+- TEST 16: Registry URL resolution
+- TEST 17: Destructuring outputs
+- TEST 18: Registry caching
+- TEST 19: Force refresh
+- TEST 20: Import registry structure
+- TEST 21: Complete registry composition
+- TEST 22: Invoking with destructuring
+- TEST 23: Registry error handling
+- TEST 24: Registry helper functions
+
+### Testing (Program Contracts)
+- Tested INPUT declaration (required/optional) ✅
+- Tested OUTPUT binding ✅
+- Tested USE statement syntax (local & registry) ✅
+- Tested program invocation ✅
+- Tested output access via dot notation ✅
+- Tested destructuring outputs ✅
+- Tested parallel program execution ✅
+- Tested program composition chains ✅
+- Tested error handling in program calls ✅
+- Tested contract validation rules ✅
+- Tested registry URL resolution ✅
+- Tested caching behavior ✅
+- Tested force refresh ✅
+- Tested import registry structure ✅
+- Tested registry error scenarios ✅
+- Validated 24 test scenarios ✅
+
+### Changed (Program Contracts)
+- `SKILL.md` sections renumbered (4-21, was 3-20)
+- `vm.md` sections renumbered (13-20, was 12-19)
+- Added Program Contracts as section 3 in SKILL.md
+- Updated Modules & Imports section (17) with USE, registry, and destructuring
+- Added Program Contracts & Composition as section 12 in vm.md
+- Added Registry Cache Management subsection in vm.md
+- Added Destructuring Assignment subsection in vm.md
+
+### Backward Compatibility (Program Contracts)
+- ✅ All v0.0.1 and v0.0.2 workflows continue to work
+- INPUT/OUTPUT/USE are optional
+- Existing workflows without contracts work perfectly
+- No breaking changes to syntax
+
+---
+
+#### Execution Philosophy Documentation ✅ COMPLETE
+
+**philosophy.md** (NEW)
+- Core thesis: "You are not simulating a VM. You ARE the VM."
+- Explains why detailed simulation IS actual implementation
+- Documents the AI-as-computing-substrate paradigm
+- Clarifies strict mode vs semantic mode execution
+- Defines the contract between program authors and the VM
+- Practical execution guidelines for reading .cheesecake programs
+
+**Updated Core Philosophy in SKILL.md and vm.md**
+- Strong philosophical foundation referencing philosophy.md
+- Clearer explanation of "You ARE the interpreter"
+- Two execution modes: strict (most code) + semantic (`**...**`)
+
+**Original Naming Convention**
+- Replaced all copied @alice/@bob examples with original CheeseCake namespaces
+- New namespace scheme:
+  - `@workflows/` - Common workflow patterns
+  - `@stdlib/` - Standard library utilities
+  - `@acme/` - Example corporate namespace
+  - `@cheesecake/` - Official CheeseCake programs
+
+---
+
 ## [Unreleased] - Planned for future v0.0.2 modules
 
-### Planned Features (Modules 13-14)
-- Module 13: Enhanced testing features (TEST SUITE, MOCK, ASSERT)
+### Planned Features (Module 14)
 - Module 14: Execution history and replay
 
 ---

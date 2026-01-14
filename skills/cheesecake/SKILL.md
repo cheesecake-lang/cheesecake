@@ -1,7 +1,7 @@
 # CheeseCake Language Specification
 # Purpose: Complete language definition for AI agents to understand and execute .cheesecake files
 # Part of: CheeseCake v0.0.1 - Module 2 (Language Specification)
-# Updated: v0.0.2 - Added PHASE (Module 9), INTERACTIVE (Module 10), CONFIG (Module 11), Events & Scheduling (Module 12)
+# Updated: v0.0.2 - Added PHASE (M9), INTERACTIVE (M10), CONFIG (M11), Events (M12), Testing (M13), Program Contracts
 #
 # This file teaches AI agents the complete CheeseCake syntax and semantics.
 # When you read a .cheesecake file, use this specification to understand and execute it.
@@ -11,11 +11,13 @@
 #
 # Dependencies:
 #   - vm.md (execution semantics)
+#   - philosophy.md (execution philosophy - YOU are the VM)
 #   - Claude Code Task tool (for creating sub-agent sessions)
 #
 # Related:
 #   - syntax-reference.md (quick reference)
 #   - helper.md (for generating .cheesecake files)
+#   - philosophy.md (understand why you ARE the CheeseCake VM)
 
 ---
 name: cheesecake
@@ -30,18 +32,26 @@ description: CheeseCake language interpreter. Use when reading or executing .che
 
 ### Core Philosophy
 
+**You are not simulating a virtual machine. You ARE the virtual machine.**
+
+When you read a `.cheesecake` file, you do not "pretend" to execute it—you actually execute it. The sessions you spawn are real. The decisions you make are real. The outputs you produce are real.
+
+For the complete philosophical foundation, see `philosophy.md`. Key principles:
+
 1. **AI-Native**: Designed for AI interpretation, not machine parsing
-2. **Structured**: Explicit keywords (`AGENT`, `VAR`, `RUN`, `SESSION`) for clarity
-3. **Object-Oriented**: First-class support for classes, inheritance, composition
-4. **Portable**: Works across AI agents (abstraction layer)
-5. **Resumable**: Built-in checkpoints for long-running workflows
+2. **You Are The VM**: Your understanding is the parser; your reasoning is the execution engine
+3. **Structured Clarity**: Explicit UPPERCASE keywords and END markers for unambiguous parsing
+4. **Semantic Intelligence**: `**...**` conditions explicitly delegate judgment to you
+5. **Object-Oriented**: First-class support for agents, skills, inheritance, composition
+6. **Resumable**: Built-in checkpoints for long-running workflows
 
 ### Execution Model
 
-- **Session-as-Runtime**: The AI session executing the .cheesecake file IS the interpreter
-- **Sub-agent Spawning**: Use Claude Code's Task tool to create sessions for each agent
-- **Semantic Evaluation**: Conditions in `**...**` are evaluated by AI understanding, not regex
-- **State Persistence**: Checkpoints save to `.cheesecake/state/` directory
+- **You ARE the Interpreter**: The AI reading this specification IS the execution engine
+- **Sub-agent Spawning**: Use the Task tool to create real sessions for each agent
+- **Two Modes**: Strict execution (most code) + semantic evaluation (`**...**` conditions)
+- **Real State**: Variables exist in your working memory; checkpoints persist to filesystem
+- **Real Results**: Sessions produce real outputs that you capture and process
 
 ---
 
@@ -52,8 +62,16 @@ description: CheeseCake language interpreter. Use when reading or executing .che
 ```cheesecake
 # Comments start with # and go to end of line
 
-# Imports (optional, at top)
-IMPORT "module.cheesecake" AS alias
+# Program contract (optional, at top)
+INPUT topic: "The subject to process"
+INPUT depth: "Processing depth" DEFAULT: "medium"
+
+# Program imports (optional, for calling other programs)
+USE "@namespace/program-name"
+USE "@workflows/analyzer" AS analyzer
+
+# Local module imports (optional, for code reuse)
+IMPORT "local/agents.cheesecake" AS agents
 
 # Skill definitions (optional)
 SKILL skill_name:
@@ -69,7 +87,10 @@ AGENT AgentName:
 # Main execution logic
 VAR agent = NEW AgentName()
 VAR result = RUN SESSION(agent): TASK: "Do something"
-PRINT result
+
+# Program outputs (optional, declares what this program returns)
+OUTPUT findings = result
+OUTPUT summary = result.summary
 ```
 
 ### File Conventions
@@ -102,7 +123,155 @@ PRINT result
 
 ---
 
-## 3. SKILL Definitions (Traits/Interfaces)
+## 3. Program Contracts (INPUT/OUTPUT)
+
+Program contracts define the **public API** of a `.cheesecake` program - what inputs it expects and what outputs it produces. This enables **program composition** where one program can call another.
+
+### INPUT Declaration
+
+Declares what values the program expects from callers:
+
+```cheesecake
+INPUT name: "Description of this input"
+INPUT name: "Description" DEFAULT: default_value
+```
+
+**Syntax:**
+- `INPUT` keyword followed by parameter name
+- Colon and description string (for documentation)
+- Optional `DEFAULT:` with a default value
+
+**Examples:**
+
+```cheesecake
+# Required inputs (caller must provide)
+INPUT topic: "The subject to research"
+INPUT query: "Search query string"
+
+# Optional inputs (have defaults)
+INPUT depth: "How deep to search" DEFAULT: "medium"
+INPUT max_results: "Maximum results to return" DEFAULT: 10
+INPUT format: "Output format (json, markdown, text)" DEFAULT: "markdown"
+```
+
+**Rules:**
+- INPUT declarations must appear at **top of file** (before any executable code)
+- INPUT names become available as variables in the program body
+- Required inputs (no DEFAULT) must be provided by caller
+- Optional inputs (with DEFAULT) use default if caller doesn't provide
+
+### OUTPUT Declaration
+
+Declares what values the program returns to callers:
+
+```cheesecake
+OUTPUT name = expression
+```
+
+**Syntax:**
+- `OUTPUT` keyword followed by output name
+- `=` and the value/expression to return
+
+**Examples:**
+
+```cheesecake
+# Simple outputs
+OUTPUT findings = research_results
+OUTPUT summary = final_summary
+
+# Computed outputs
+OUTPUT word_count = LENGTH(article)
+OUTPUT success = error_count == 0
+
+# Multiple outputs
+OUTPUT report = generated_report
+OUTPUT sources = source_list
+OUTPUT metadata = {
+  generated_at: NOW(),
+  model_used: "sonnet",
+  tokens_used: token_count
+}
+```
+
+**Rules:**
+- OUTPUT can appear **anywhere** in the program (typically at the end)
+- Multiple OUTPUT declarations allowed
+- OUTPUT values are collected and returned to caller as an object
+- OUTPUT names must be unique within a program
+
+### Complete Contract Example
+
+```cheesecake
+# ============================================
+# research-workflow.cheesecake
+# A reusable research program with clear contract
+# ============================================
+
+# === INPUT CONTRACT ===
+INPUT topic: "The subject to research"
+INPUT depth: "Research depth (shallow, medium, deep)" DEFAULT: "medium"
+INPUT sources: "Number of sources to consult" DEFAULT: 5
+
+# === AGENT DEFINITIONS ===
+AGENT Researcher:
+  MODEL: sonnet
+  PROMPT: "You are a thorough researcher."
+
+AGENT Synthesizer:
+  MODEL: opus
+  PROMPT: "You synthesize research into insights."
+
+# === MAIN LOGIC ===
+VAR researcher = NEW Researcher()
+VAR synthesizer = NEW Synthesizer()
+
+# Use INPUT values as variables
+VAR raw_findings = RUN SESSION(researcher):
+  TASK: "Research {topic} at {depth} depth using {sources} sources"
+
+VAR synthesis = RUN SESSION(synthesizer):
+  TASK: "Synthesize these findings into key insights"
+  INPUT: {raw_findings}
+
+VAR source_list = RUN SESSION(researcher):
+  TASK: "Extract source citations from {raw_findings}"
+
+# === OUTPUT CONTRACT ===
+OUTPUT findings = synthesis
+OUTPUT sources = source_list
+OUTPUT metadata = {
+  topic: topic,
+  depth: depth,
+  researched_at: NOW()
+}
+```
+
+### Why Contracts Matter
+
+Without contracts:
+```cheesecake
+# Someone reads your program... what does it need? What does it return?
+# No way to know without reading all the code!
+```
+
+With contracts:
+```cheesecake
+# Clear at a glance:
+INPUT topic: "The subject to research"        # Needs a topic
+INPUT depth: "Research depth" DEFAULT: "medium"  # Optional depth
+OUTPUT findings = ...                          # Returns findings
+OUTPUT sources = ...                           # Returns sources
+```
+
+Contracts enable:
+1. **Documentation** - Clear API without reading implementation
+2. **Validation** - VM can check required inputs are provided
+3. **Composition** - Other programs can call this program
+4. **Tooling** - IDEs/tools can show autocomplete for inputs/outputs
+
+---
+
+## 4. SKILL Definitions (Traits/Interfaces)
 
 Skills are reusable capability bundles that can be attached to agents.
 
@@ -159,7 +328,7 @@ SKILL academic-research EXTENDS web-research:
 
 ---
 
-## 4. AGENT Definitions (Classes)
+## 5. AGENT Definitions (Classes)
 
 Agents are templates (like classes) for creating sessions. Each agent has a model, skills, and a system prompt.
 
@@ -218,7 +387,7 @@ AGENT DataScientist IMPLEMENTS [data-analysis, ml-modeling, visualization]:
 
 ---
 
-## 5. Variables & Assignment
+## 6. Variables & Assignment
 
 ### Variable Declaration
 
@@ -275,7 +444,7 @@ CONST timeout = 30s
 
 ---
 
-## 6. SESSION & RUN
+## 7. SESSION & RUN
 
 ### Creating a Session
 
@@ -347,7 +516,7 @@ VAR result = RUN SESSION(agent):
 
 ---
 
-## 7. Control Flow
+## 8. Control Flow
 
 ### Sequential Execution (Explicit)
 
@@ -617,7 +786,7 @@ Phase 4: Output          $0.00  (0%)    0.5s
 
 ---
 
-## 8. Loops
+## 9. Loops
 
 ### Fixed Iteration (REPEAT)
 
@@ -716,7 +885,7 @@ END LOOP
 
 ---
 
-## 9. Interactive Mode (v0.0.2+)
+## 10. Interactive Mode (v0.0.2+)
 
 **Purpose**: Pause workflow execution to request user input and make decisions based on user choices.
 
@@ -977,7 +1146,7 @@ INTERACTIVE uses Claude Code's `AskUserQuestion` tool internally:
 
 ---
 
-## 10. State & Persistence
+## 11. State & Persistence
 
 ### Checkpoints
 
@@ -1066,7 +1235,7 @@ MEMORY project_state.history.APPEND({
 
 ---
 
-## 11. Configuration (CONFIG Block) - v0.0.2+
+## 12. Configuration (CONFIG Block) - v0.0.2+
 
 ### Overview
 
@@ -1349,7 +1518,7 @@ PRINT "Total cost: {CURRENT_COST} / {CONFIG.BUDGET}"
 
 ---
 
-## 12. Events & Scheduling (v0.0.2+)
+## 13. Events & Scheduling (v0.0.2+)
 
 CheeseCake supports reactive programming through events and scheduling. See `events.md` for complete specification.
 
@@ -1509,7 +1678,163 @@ Since CheeseCake is AI-interpreted:
 
 ---
 
-## 13. Error Handling
+## 14. Testing Framework (v0.0.2+)
+
+CheeseCake includes a built-in testing framework for validating workflows without incurring AI costs. See `testing.md` for complete specification.
+
+### TEST SUITE
+
+Groups related tests with shared setup/teardown:
+
+```cheesecake
+TEST SUITE "Workflow Tests":
+  SETUP:
+    VAR fixtures = LOAD "test-data.json"
+  END SETUP
+
+  TEARDOWN:
+    CLEANUP temp_files
+  END TEARDOWN
+
+  TEST "test case 1":
+    # Test body
+  END TEST
+
+  TEST "test case 2":
+    # Test body
+  END TEST
+
+END TEST SUITE
+```
+
+### TEST
+
+Individual test cases:
+
+```cheesecake
+TEST "descriptive test name":
+  # Arrange
+  MOCK Agent RETURNS expected_value
+
+  # Act
+  VAR result = RUN SESSION(agent): TASK: "Do something"
+
+  # Assert
+  ASSERT result IS NOT NULL
+  ASSERT result.status == "success"
+END TEST
+```
+
+### MOCK
+
+Replace agent sessions with fixed responses (no AI calls):
+
+```cheesecake
+# Simple mock - all sessions return this
+MOCK Researcher RETURNS {data: "mock data", sources: ["a", "b"]}
+
+# Task-specific mock
+MOCK Writer FOR TASK MATCHING "*article*" RETURNS "Article content..."
+MOCK Writer FOR TASK MATCHING "*summary*" RETURNS "Summary content..."
+
+# Error mock
+MOCK APIClient THROWS "Connection timeout"
+```
+
+**Pattern Matching:**
+- `"*"` - Any task
+- `"*article*"` - Contains "article"
+- `"Write *"` - Starts with "Write "
+- `"* report"` - Ends with " report"
+
+### ASSERT
+
+Verify conditions:
+
+```cheesecake
+# Literal assertions
+ASSERT value IS NOT NULL
+ASSERT value == expected
+ASSERT value > minimum
+ASSERT list CONTAINS item
+ASSERT string MATCHES "pattern"
+
+# Semantic assertions (AI-evaluated)
+ASSERT **{result} is well-structured**
+ASSERT **{article} is publication-ready**
+
+# Custom failure message
+ASSERT count > 0 MESSAGE "Count must be positive"
+```
+
+**Assertion Operators:**
+
+| Operator | Example |
+|----------|---------|
+| `==`, `!=` | `ASSERT x == 5` |
+| `>`, `<`, `>=`, `<=` | `ASSERT x > 0` |
+| `IS NULL`, `IS NOT NULL` | `ASSERT x IS NOT NULL` |
+| `IS TRUE`, `IS FALSE` | `ASSERT flag IS TRUE` |
+| `CONTAINS` | `ASSERT list CONTAINS item` |
+| `MATCHES` | `ASSERT str MATCHES "*.ts"` |
+
+### Complete Example
+
+```cheesecake
+TEST SUITE "Research Workflow":
+
+  SETUP:
+    VAR researcher = NEW Researcher()
+    VAR writer = NEW Writer()
+  END SETUP
+
+  TEST "produces article from research":
+    MOCK Researcher RETURNS {
+      findings: "Research data...",
+      sources: ["arxiv.org", "nature.com"]
+    }
+    MOCK Writer RETURNS "# Article\n\nContent..."
+
+    VAR research = RUN SESSION(researcher): TASK: "Research AI"
+    VAR article = RUN SESSION(writer): TASK: "Write" INPUT: {research}
+
+    ASSERT research.sources.length == 2
+    ASSERT article CONTAINS "# Article"
+    ASSERT **{article} is coherent and well-written**
+  END TEST
+
+  TEST "handles empty research":
+    MOCK Researcher RETURNS {findings: "", sources: []}
+
+    VAR research = RUN SESSION(researcher): TASK: "Research"
+
+    ASSERT research.findings == ""
+    ASSERT research.sources.length == 0
+  END TEST
+
+END TEST SUITE
+```
+
+### Rules
+
+1. **TEST SUITE**: Unique name, at least one TEST
+2. **SETUP/TEARDOWN**: Run before/after each test
+3. **MOCK scope**: Only within current TEST block
+4. **ASSERT failure**: Test stops on first failure
+5. **Isolation**: Each test has own scope
+
+### Running Tests
+
+```bash
+/cheesecake test                           # Run all tests
+/cheesecake test tests/my-tests.cheesecake # Specific file
+/cheesecake test --suite "Workflow Tests"  # Specific suite
+/cheesecake test --verbose                 # Detailed output
+```
+
+---
+
+## 15. Error Handling
 
 ### Try/Catch/Finally
 
@@ -1562,7 +1887,7 @@ END TRY
 
 ---
 
-## 14. Functions
+## 16. Functions
 
 Functions are reusable workflows with parameters and return values.
 
@@ -1614,12 +1939,18 @@ END FUNCTION
 
 ---
 
-## 15. Modules & Imports
+## 17. Modules, Imports & Program Composition
 
-### Import Syntax
+CheeseCake has two mechanisms for code reuse:
+1. **IMPORT** - Include local code (agents, skills, functions)
+2. **USE** - Call external programs (program-to-program composition)
+
+### IMPORT: Local Code Inclusion
+
+Import definitions from local `.cheesecake` files:
 
 ```cheesecake
-# Import entire module
+# Import entire module with alias
 IMPORT "path/to/module.cheesecake" AS alias
 
 # Use imported definitions
@@ -1627,16 +1958,16 @@ VAR agent = NEW alias.AgentName()
 VAR result = CALL alias.function_name(args)
 ```
 
-### Export Syntax
+**Export Syntax** (in the module being imported):
 
 ```cheesecake
-# In the module file
+# Make definitions available for import
 EXPORT AGENT MyAgent
 EXPORT SKILL MySkill
 EXPORT FUNCTION my_function
 ```
 
-### Examples
+**IMPORT Example:**
 
 ```cheesecake
 # common/agents.cheesecake
@@ -1661,9 +1992,403 @@ VAR findings = RUN SESSION(researcher): TASK: "Research AI trends"
 VAR article = RUN SESSION(writer): TASK: "Write article" INPUT: {findings}
 ```
 
+### USE: Program Composition
+
+USE enables calling complete programs that have INPUT/OUTPUT contracts.
+
+**Syntax:**
+
+```cheesecake
+# Import from registry (future)
+USE "@namespace/program-name"
+USE "@namespace/program-name" AS alias
+
+# Import from local file
+USE "./path/to/program.cheesecake"
+USE "./research-workflow.cheesecake" AS research
+```
+
+**Invoking a USE'd Program:**
+
+```cheesecake
+# Call with named inputs
+VAR result = RUN program_name(input1: value1, input2: value2)
+
+# Access outputs
+PRINT result.output_name
+VAR data = result.findings
+```
+
+### USE vs IMPORT
+
+| Aspect | IMPORT | USE |
+|--------|--------|-----|
+| **Purpose** | Include code definitions | Call complete programs |
+| **What it imports** | Agents, Skills, Functions | Programs with contracts |
+| **Execution** | Code runs in current context | Program runs as sub-execution |
+| **Contract** | Uses EXPORT | Uses INPUT/OUTPUT |
+| **Access** | `alias.Definition` | `RUN program(args)` |
+
+### Complete Program Composition Example
+
+**Step 1: Create a reusable program with contract**
+
+```cheesecake
+# research-workflow.cheesecake
+# A reusable research program
+
+# === CONTRACT ===
+INPUT topic: "The subject to research"
+INPUT depth: "Research depth" DEFAULT: "medium"
+
+# === IMPLEMENTATION ===
+AGENT Researcher:
+  MODEL: sonnet
+  PROMPT: "You are a thorough researcher."
+
+VAR researcher = NEW Researcher()
+
+VAR findings = RUN SESSION(researcher):
+  TASK: "Research {topic} at {depth} depth"
+
+VAR sources = RUN SESSION(researcher):
+  TASK: "Extract citations from {findings}"
+
+# === OUTPUTS ===
+OUTPUT findings = findings
+OUTPUT sources = sources
+OUTPUT metadata = {topic: topic, depth: depth, timestamp: NOW()}
+```
+
+**Step 2: Call the program from another program**
+
+```cheesecake
+# main.cheesecake
+# Composes multiple programs
+
+USE "./research-workflow.cheesecake" AS research
+USE "./writing-workflow.cheesecake" AS writing
+
+# Call research program with inputs
+VAR research_result = RUN research(topic: "quantum computing", depth: "deep")
+
+# Access outputs from research
+PRINT "Found {LENGTH(research_result.sources)} sources"
+
+# Pass to writing program
+VAR article = RUN writing(
+  content: research_result.findings,
+  sources: research_result.sources,
+  style: "technical"
+)
+
+# Final outputs
+OUTPUT article = article.text
+OUTPUT bibliography = article.bibliography
+```
+
+### Program Invocation Semantics
+
+When `RUN program(inputs)` executes:
+
+1. **Validate inputs** - Check all required inputs are provided
+2. **Apply defaults** - Use DEFAULT values for missing optional inputs
+3. **Execute program** - Run the program's statements
+4. **Collect outputs** - Gather all OUTPUT declarations
+5. **Return result** - Return outputs as an object
+
+**Example Flow:**
+
+```cheesecake
+USE "./analyzer.cheesecake" AS analyze
+
+# analyzer.cheesecake has:
+#   INPUT data: "Data to analyze"
+#   INPUT format: "Output format" DEFAULT: "json"
+#   OUTPUT result = analysis
+#   OUTPUT confidence = score
+
+# Call with required input only (format uses default)
+VAR analysis = RUN analyze(data: my_data)
+# analysis.result contains the analysis
+# analysis.confidence contains the score
+
+# Call with all inputs
+VAR analysis2 = RUN analyze(data: my_data, format: "markdown")
+```
+
+### Error Handling in Program Calls
+
+```cheesecake
+USE "./risky-program.cheesecake" AS risky
+
+TRY:
+  VAR result = RUN risky(input: data)
+CATCH error:
+  LOG ERROR: "Program failed: {error.message}"
+  VAR result = fallback_value
+END TRY
+```
+
+### Parallel Program Execution
+
+```cheesecake
+USE "./research.cheesecake" AS research
+USE "./analyze.cheesecake" AS analyze
+
+PARALLEL:
+  VAR r1 = RUN research(topic: "AI")
+  VAR r2 = RUN research(topic: "ML")
+  VAR r3 = RUN research(topic: "NLP")
+END PARALLEL
+
+# All three research programs run concurrently
+```
+
+### Registry URL Resolution
+
+For external program imports, the registry path format is:
+
+```cheesecake
+USE "@namespace/program-name"     # From registry
+USE "@acme/data-processor"          # Corporate namespace
+USE "@stdlib/text-utils"            # Standard library
+USE "@workflows/web-researcher"     # With explicit alias
+```
+
+**Registry Path Format:**
+
+```
+@<handle>/<slug>
+```
+
+- **handle**: User or organization namespace (alphanumeric, lowercase)
+- **slug**: Program identifier (alphanumeric, lowercase, hyphens allowed)
+
+**URL Resolution Protocol:**
+
+When the VM encounters a registry import:
+
+1. **Construct URL**: `https://registry.cheesecake.dev/@handle/slug`
+2. **Fetch program**: HTTP GET with appropriate headers
+3. **Parse contract**: Extract INPUT/OUTPUT declarations
+4. **Validate**: Ensure program is valid CheeseCake
+5. **Cache**: Store locally for performance
+6. **Register**: Add to Import Registry with alias
+
+**Example Resolution:**
+
+```cheesecake
+USE "@workflows/web-researcher"
+# → Fetches: https://registry.cheesecake.dev/@workflows/web-researcher
+# → Parses: INPUT topic, INPUT depth DEFAULT: "medium"
+# → Registers: web-researcher (default alias = slug)
+```
+
+**Caching Behavior:**
+
+- Programs are cached in `.cheesecake/cache/`
+- Cache key: `@handle/slug` + version hash
+- Default cache TTL: 24 hours
+- Force refresh: `USE "@workflows/web-researcher" REFRESH`
+
+**Error Handling:**
+
+```cheesecake
+# If registry program not found
+USE "@workflows/nonexistent"  # → Error: Program @workflows/nonexistent not found
+
+# If network error
+USE "@workflows/web-researcher"  # → Falls back to cache if available
+                                 # → Error if no cache and network fails
+```
+
+### Destructuring Outputs
+
+For convenience, outputs can be destructured directly:
+
+```cheesecake
+# Standard assignment
+VAR result = RUN research(topic: "quantum computing")
+PRINT result.findings
+PRINT result.sources
+
+# Destructured assignment
+VAR { findings, sources } = RUN research(topic: "quantum computing")
+PRINT findings    # Direct access
+PRINT sources     # Direct access
+
+# Partial destructuring
+VAR { findings } = RUN research(topic: "AI")
+# Only 'findings' is extracted, other outputs discarded
+
+# Destructuring with rename
+VAR { findings AS data, sources AS refs } = RUN research(topic: "ML")
+PRINT data   # Renamed from 'findings'
+PRINT refs   # Renamed from 'sources'
+```
+
+**Destructuring Rules:**
+
+- Curly braces `{ }` indicate destructuring
+- Names must match OUTPUT names in the called program
+- Unknown names cause a warning (not error)
+- `AS` keyword allows renaming during destructuring
+
+### Import Registry
+
+The VM maintains an Import Registry that tracks all USE'd programs:
+
+```
+ImportRegistry = {
+  "web-researcher": {
+    source: "@workflows/web-researcher",
+    resolved_url: "https://registry.cheesecake.dev/@workflows/web-researcher",
+    contract: {
+      inputs: [
+        {name: "topic", description: "Subject to research", required: true},
+        {name: "depth", description: "Research depth", required: false, default: "medium"}
+      ],
+      outputs: ["findings", "sources", "metadata"]
+    },
+    cached_at: "2026-01-14T10:30:00Z",
+    version: "1.2.0"
+  },
+  "content-writer": {
+    source: "./content-writer.cheesecake",
+    resolved_url: null,  # Local file
+    contract: {...}
+  }
+}
+```
+
+**Accessing Registry Info:**
+
+```cheesecake
+# Check if program is registered
+IF HAS_IMPORT("research"):
+  VAR result = RUN research(topic: "AI")
+END IF
+
+# Get contract info (advanced)
+VAR inputs = GET_INPUTS("research")
+# inputs = [{name: "topic", required: true}, {name: "depth", required: false, default: "medium"}]
+```
+
+### Import Execution Semantics
+
+When a program invokes an imported program via `RUN`:
+
+1. **Lookup**: Find program in Import Registry by alias
+2. **Bind inputs**: Map caller-provided values to program's INPUT declarations
+3. **Validate inputs**:
+   - Error if required input missing
+   - Warning if unknown input provided (ignored)
+   - Apply DEFAULT for missing optional inputs
+4. **Create context**: New isolated execution context
+5. **Inject inputs**: Make inputs available as variables in program scope
+6. **Execute**: Run the imported program's statements
+7. **Collect outputs**: Gather all OUTPUT bindings
+8. **Return**: Package outputs as result object
+
+**Execution Context:**
+
+- Imported program runs in **isolated scope**
+- Cannot access caller's variables
+- Cannot modify caller's state
+- Only communicates through INPUT/OUTPUT
+- Shares VM session (same cost tracking, progress)
+
+**Depth Tracking:**
+
+```cheesecake
+# Programs can call programs (chaining)
+# Max depth: 10 to prevent infinite recursion
+
+# main.cheesecake (depth 0)
+USE "@workflows/pipeline-orchestrator"
+RUN pipeline-orchestrator(data: x)
+
+# pipeline-orchestrator.cheesecake (depth 1)
+USE "@workflows/data-processor"
+RUN data-processor(item: data)
+
+# data-processor.cheesecake (depth 2)
+USE "@stdlib/validator"
+RUN validator(value: item)
+# ... up to depth 10
+```
+
+### Complete Composition Example
+
+A program that chains research and quality review until standards are met:
+
+```cheesecake
+# iterative-research.cheesecake
+# Iterates until quality threshold is reached
+
+USE "@workflows/web-researcher" AS researcher
+USE "@workflows/quality-reviewer" AS reviewer
+
+INPUT topic: "What to investigate"
+
+# Iterate until quality is high
+VAR result = NULL
+VAR review = NULL
+
+LOOP UNTIL **{review.score} >= 8** MAX 3:
+  result = RUN researcher(topic: topic)
+  review = RUN reviewer(content: result.findings)
+END LOOP
+
+OUTPUT findings = result.findings
+OUTPUT sources = result.sources
+OUTPUT final_score = review.score
+```
+
+**Invoking the composed program:**
+
+```cheesecake
+USE "@workflows/iterative-research" AS deep_research
+
+VAR final = RUN deep_research(topic: "machine learning trends")
+
+AGENT Presenter:
+  MODEL: opus
+  PROMPT: "Present findings clearly and concisely."
+
+VAR presenter = NEW Presenter()
+
+VAR presentation = RUN SESSION(presenter):
+  TASK: "Present these findings: {final.findings}"
+```
+
+**With destructuring:**
+
+```cheesecake
+USE "@workflows/iterative-research" AS deep_research
+
+VAR { findings, sources, final_score } = RUN deep_research(topic: "machine learning trends")
+
+IF final_score >= 8:
+  PRINT "High quality research achieved!"
+  PRINT findings
+ELSE:
+  PRINT "Quality threshold not met"
+END IF
+```
+
+### Best Practices
+
+1. **Always define contracts** - Every reusable program should have INPUT/OUTPUT
+2. **Use descriptive input names** - `topic` not `t`, `max_results` not `n`
+3. **Provide defaults for optional inputs** - Makes programs easier to call
+4. **Document inputs** - The description string is documentation
+5. **Keep programs focused** - One program, one responsibility
+
 ---
 
-## 16. Built-in Functions & Commands
+## 18. Built-in Functions & Commands
 
 ### Logging
 
@@ -1708,7 +2433,7 @@ DELETE file                      # Delete file
 
 ---
 
-## 17. Operators & Comparisons
+## 19. Operators & Comparisons
 
 ### Assignment
 
@@ -1737,7 +2462,7 @@ IF **NOT {failed}**:
 
 ---
 
-## 18. Best Practices
+## 20. Best Practices
 
 ### 1. Use Descriptive Names
 
@@ -1798,7 +2523,7 @@ END FOR
 
 ---
 
-## 19. Complete Example
+## 21. Complete Example
 
 Here's a comprehensive example using many CheeseCake features:
 

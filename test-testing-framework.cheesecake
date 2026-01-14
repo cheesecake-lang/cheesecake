@@ -1,0 +1,632 @@
+# ============================================
+# Test Workflow: Testing Framework Features
+# Purpose: Test Module 13 (Testing Framework) functionality
+# ============================================
+
+# ============================================
+# TEST 1: TEST SUITE Declaration
+# ============================================
+PRINT "============================================"
+PRINT "TEST 1: TEST SUITE Declaration"
+PRINT "============================================"
+
+TEST SUITE "Basic Suite Test":
+
+  TEST "simple test passes":
+    VAR x = 5
+    ASSERT x == 5
+  END TEST
+
+  TEST "another test in same suite":
+    VAR y = "hello"
+    ASSERT y == "hello"
+  END TEST
+
+END TEST SUITE
+
+PRINT "TEST SUITE 'Basic Suite Test' declared"
+PRINT "  Contains 2 tests"
+PRINT "  Both should PASS"
+PRINT ""
+
+# ============================================
+# TEST 2: SETUP and TEARDOWN
+# ============================================
+PRINT "============================================"
+PRINT "TEST 2: SETUP and TEARDOWN"
+PRINT "============================================"
+
+TEST SUITE "Setup/Teardown Test":
+
+  SETUP:
+    VAR fixtures = {name: "test", value: 42}
+    VAR counter = 0
+    LOG INFO: "SETUP executed"
+  END SETUP
+
+  TEARDOWN:
+    LOG INFO: "TEARDOWN executed"
+    CLEANUP temp_resources
+  END TEARDOWN
+
+  TEST "can access setup variables":
+    ASSERT fixtures.name == "test"
+    ASSERT fixtures.value == 42
+    ASSERT counter == 0
+  END TEST
+
+  TEST "setup runs fresh for each test":
+    # counter should be 0 again (fresh setup)
+    ASSERT counter == 0
+    VAR counter = counter + 1
+    ASSERT counter == 1
+  END TEST
+
+END TEST SUITE
+
+PRINT "SETUP runs before each test"
+PRINT "TEARDOWN runs after each test"
+PRINT ""
+
+# ============================================
+# TEST 3: Simple MOCK
+# ============================================
+PRINT "============================================"
+PRINT "TEST 3: Simple MOCK"
+PRINT "============================================"
+
+AGENT Researcher:
+  MODEL: sonnet
+  PROMPT: "You are a researcher."
+
+TEST SUITE "Mock Tests":
+
+  TEST "mock returns fixed value":
+    MOCK Researcher RETURNS {
+      data: "mocked research data",
+      confidence: 0.95
+    }
+
+    VAR researcher = NEW Researcher()
+    VAR result = RUN SESSION(researcher): TASK: "Research something"
+
+    ASSERT result.data == "mocked research data"
+    ASSERT result.confidence == 0.95
+  END TEST
+
+END TEST SUITE
+
+PRINT "MOCK replaces real AI calls"
+PRINT "Returns fixed value instantly"
+PRINT "Cost: $0.00 (no API call)"
+PRINT ""
+
+# ============================================
+# TEST 4: Task-Specific MOCK
+# ============================================
+PRINT "============================================"
+PRINT "TEST 4: Task-Specific MOCK"
+PRINT "============================================"
+
+AGENT Writer:
+  MODEL: opus
+  PROMPT: "You are a writer."
+
+TEST SUITE "Task Pattern Mocks":
+
+  TEST "different mocks for different tasks":
+    MOCK Writer FOR TASK MATCHING "*article*" RETURNS "Article content here"
+    MOCK Writer FOR TASK MATCHING "*summary*" RETURNS "Brief summary"
+    MOCK Writer FOR TASK MATCHING "*tweet*" RETURNS "Short tweet"
+
+    VAR writer = NEW Writer()
+
+    VAR article = RUN SESSION(writer): TASK: "Write an article about AI"
+    VAR summary = RUN SESSION(writer): TASK: "Write a summary of the report"
+    VAR tweet = RUN SESSION(writer): TASK: "Write a tweet about the launch"
+
+    ASSERT article == "Article content here"
+    ASSERT summary == "Brief summary"
+    ASSERT tweet == "Short tweet"
+  END TEST
+
+END TEST SUITE
+
+PRINT "Pattern matching for task-specific mocks:"
+PRINT "  *article* - matches 'Write an article about AI'"
+PRINT "  *summary* - matches 'Write a summary of the report'"
+PRINT "  *tweet* - matches 'Write a tweet about the launch'"
+PRINT ""
+
+# ============================================
+# TEST 5: MOCK THROWS (Error Simulation)
+# ============================================
+PRINT "============================================"
+PRINT "TEST 5: MOCK THROWS (Error Simulation)"
+PRINT "============================================"
+
+AGENT APIClient:
+  MODEL: sonnet
+  PROMPT: "You are an API client."
+
+TEST SUITE "Error Mock Tests":
+
+  TEST "mock can simulate errors":
+    MOCK APIClient THROWS "Connection timeout after 30s"
+
+    VAR client = NEW APIClient()
+
+    TRY:
+      VAR data = RUN SESSION(client): TASK: "Fetch data from API"
+      ASSERT FALSE MESSAGE "Should have thrown error"
+    CATCH error:
+      ASSERT error.message CONTAINS "timeout"
+    END TRY
+  END TEST
+
+END TEST SUITE
+
+PRINT "MOCK THROWS simulates errors"
+PRINT "Useful for testing error handling"
+PRINT ""
+
+# ============================================
+# TEST 6: Literal ASSERT Operators
+# ============================================
+PRINT "============================================"
+PRINT "TEST 6: Literal ASSERT Operators"
+PRINT "============================================"
+
+TEST SUITE "Assert Operators":
+
+  TEST "equality operators":
+    VAR x = 5
+    VAR y = 10
+
+    ASSERT x == 5
+    ASSERT y != 5
+    ASSERT x < y
+    ASSERT y > x
+    ASSERT x <= 5
+    ASSERT y >= 10
+  END TEST
+
+  TEST "null checks":
+    VAR defined = "value"
+    VAR empty = NULL
+
+    ASSERT defined IS NOT NULL
+    ASSERT empty IS NULL
+  END TEST
+
+  TEST "boolean checks":
+    VAR flag_true = TRUE
+    VAR flag_false = FALSE
+
+    ASSERT flag_true IS TRUE
+    ASSERT flag_false IS FALSE
+  END TEST
+
+  TEST "contains checks":
+    VAR list = [1, 2, 3, 4, 5]
+    VAR text = "Hello, World!"
+
+    ASSERT list CONTAINS 3
+    ASSERT text CONTAINS "World"
+  END TEST
+
+  TEST "pattern matching":
+    VAR filename = "app.ts"
+    VAR path = "src/components/Button.tsx"
+
+    ASSERT filename MATCHES "*.ts"
+    ASSERT path MATCHES "src/**/*.tsx"
+  END TEST
+
+END TEST SUITE
+
+PRINT "Assert operators tested:"
+PRINT "  ==, !=, <, >, <=, >="
+PRINT "  IS NULL, IS NOT NULL"
+PRINT "  IS TRUE, IS FALSE"
+PRINT "  CONTAINS"
+PRINT "  MATCHES"
+PRINT ""
+
+# ============================================
+# TEST 7: Semantic ASSERT
+# ============================================
+PRINT "============================================"
+PRINT "TEST 7: Semantic ASSERT"
+PRINT "============================================"
+
+TEST SUITE "Semantic Assertions":
+
+  TEST "semantic quality check":
+    MOCK Writer RETURNS "# Introduction\n\nThis is a well-structured article about AI trends. It covers machine learning, neural networks, and future implications.\n\n## Conclusion\n\nAI will continue to transform industries."
+
+    VAR writer = NEW Writer()
+    VAR article = RUN SESSION(writer): TASK: "Write article"
+
+    # Literal checks
+    ASSERT article IS NOT NULL
+    ASSERT article CONTAINS "# Introduction"
+    ASSERT article CONTAINS "## Conclusion"
+
+    # Semantic checks (AI evaluates these)
+    ASSERT **{article} is well-structured with sections**
+    ASSERT **{article} has both introduction and conclusion**
+    ASSERT **{article} is about AI or technology**
+  END TEST
+
+END TEST SUITE
+
+PRINT "Semantic assertions use AI to evaluate:"
+PRINT "  'is well-structured'"
+PRINT "  'has introduction and conclusion'"
+PRINT "  'is about AI or technology'"
+PRINT ""
+
+# ============================================
+# TEST 8: Custom ASSERT MESSAGE
+# ============================================
+PRINT "============================================"
+PRINT "TEST 8: Custom ASSERT MESSAGE"
+PRINT "============================================"
+
+TEST SUITE "Assert Messages":
+
+  TEST "custom failure messages":
+    VAR age = 25
+    VAR balance = 100
+
+    ASSERT age >= 18 MESSAGE "User must be adult"
+    ASSERT balance > 0 MESSAGE "Balance must be positive"
+    ASSERT balance <= 1000 MESSAGE "Balance cannot exceed limit"
+  END TEST
+
+END TEST SUITE
+
+PRINT "Custom messages help debug failures:"
+PRINT "  ASSERT age >= 18 MESSAGE 'User must be adult'"
+PRINT "  If fails: shows 'User must be adult'"
+PRINT ""
+
+# ============================================
+# TEST 9: Multiple Mocks in Same Test
+# ============================================
+PRINT "============================================"
+PRINT "TEST 9: Multiple Mocks in Same Test"
+PRINT "============================================"
+
+AGENT Analyzer:
+  MODEL: sonnet
+  PROMPT: "You analyze data."
+
+TEST SUITE "Multi-Mock Tests":
+
+  TEST "workflow with multiple mocked agents":
+    # Mock all agents in the workflow
+    MOCK Researcher RETURNS {
+      findings: "Research findings about quantum computing",
+      sources: ["arxiv.org", "nature.com"]
+    }
+
+    MOCK Analyzer RETURNS {
+      insights: ["Insight 1", "Insight 2"],
+      sentiment: "positive"
+    }
+
+    MOCK Writer RETURNS "# Quantum Computing Report\n\nBased on research..."
+
+    # Run full workflow with mocks
+    VAR researcher = NEW Researcher()
+    VAR analyzer = NEW Analyzer()
+    VAR writer = NEW Writer()
+
+    VAR research = RUN SESSION(researcher): TASK: "Research quantum computing"
+    VAR analysis = RUN SESSION(analyzer): TASK: "Analyze" INPUT: {research}
+    VAR report = RUN SESSION(writer): TASK: "Write report" INPUT: {analysis}
+
+    # Verify each step
+    ASSERT research.sources.length == 2
+    ASSERT analysis.insights.length == 2
+    ASSERT analysis.sentiment == "positive"
+    ASSERT report CONTAINS "Quantum Computing"
+  END TEST
+
+END TEST SUITE
+
+PRINT "Multiple agents can be mocked in one test"
+PRINT "Each returns its own fixed value"
+PRINT ""
+
+# ============================================
+# TEST 10: Test Isolation
+# ============================================
+PRINT "============================================"
+PRINT "TEST 10: Test Isolation"
+PRINT "============================================"
+
+TEST SUITE "Isolation Tests":
+
+  TEST "test 1 sets variable":
+    VAR shared = "from test 1"
+    ASSERT shared == "from test 1"
+  END TEST
+
+  TEST "test 2 has own scope":
+    # 'shared' from test 1 is NOT available here
+    VAR shared = "from test 2"
+    ASSERT shared == "from test 2"
+  END TEST
+
+  TEST "mock scope is isolated":
+    MOCK Researcher RETURNS "mock for test 3"
+    VAR r = NEW Researcher()
+    VAR result = RUN SESSION(r): TASK: "Test"
+    ASSERT result == "mock for test 3"
+  END TEST
+
+  TEST "previous mock not available":
+    # Mock from test 3 is NOT available here
+    # This would need its own mock
+    MOCK Researcher RETURNS "mock for test 4"
+    VAR r = NEW Researcher()
+    VAR result = RUN SESSION(r): TASK: "Test"
+    ASSERT result == "mock for test 4"
+  END TEST
+
+END TEST SUITE
+
+PRINT "Each test has isolated scope:"
+PRINT "  Variables don't leak between tests"
+PRINT "  Mocks don't leak between tests"
+PRINT ""
+
+# ============================================
+# TEST 11: Standalone TEST (outside suite)
+# ============================================
+PRINT "============================================"
+PRINT "TEST 11: Standalone TEST"
+PRINT "============================================"
+
+TEST "standalone test without suite":
+  VAR x = 10
+  VAR y = 20
+  ASSERT x + y == 30
+END TEST
+
+TEST "another standalone test":
+  MOCK Researcher RETURNS "standalone mock"
+  VAR r = NEW Researcher()
+  VAR result = RUN SESSION(r): TASK: "Quick test"
+  ASSERT result == "standalone mock"
+END TEST
+
+PRINT "Tests can exist outside suites"
+PRINT "Useful for quick one-off tests"
+PRINT ""
+
+# ============================================
+# TEST 12: Nested Data Assertions
+# ============================================
+PRINT "============================================"
+PRINT "TEST 12: Nested Data Assertions"
+PRINT "============================================"
+
+TEST SUITE "Nested Data Tests":
+
+  TEST "can assert on nested properties":
+    MOCK Researcher RETURNS {
+      metadata: {
+        author: "AI System",
+        version: 2,
+        tags: ["research", "quantum", "physics"]
+      },
+      results: [
+        {id: 1, score: 0.95},
+        {id: 2, score: 0.87}
+      ]
+    }
+
+    VAR r = NEW Researcher()
+    VAR data = RUN SESSION(r): TASK: "Get complex data"
+
+    # Nested property assertions
+    ASSERT data.metadata.author == "AI System"
+    ASSERT data.metadata.version == 2
+    ASSERT data.metadata.tags CONTAINS "quantum"
+    ASSERT data.results.length == 2
+    ASSERT data.results[0].score > 0.9
+    ASSERT data.results[1].id == 2
+  END TEST
+
+END TEST SUITE
+
+PRINT "Can assert on deeply nested properties"
+PRINT "  data.metadata.author"
+PRINT "  data.results[0].score"
+PRINT ""
+
+# ============================================
+# TEST 13: Error in Test Body
+# ============================================
+PRINT "============================================"
+PRINT "TEST 13: Error Handling in Tests"
+PRINT "============================================"
+
+TEST SUITE "Error Handling Tests":
+
+  TEST "test with try/catch":
+    MOCK APIClient THROWS "Network error"
+
+    VAR client = NEW APIClient()
+    VAR error_caught = FALSE
+
+    TRY:
+      RUN SESSION(client): TASK: "Call API"
+    CATCH error:
+      VAR error_caught = TRUE
+      ASSERT error.message CONTAINS "Network"
+    END TRY
+
+    ASSERT error_caught IS TRUE
+  END TEST
+
+END TEST SUITE
+
+PRINT "Tests can include error handling"
+PRINT "TRY/CATCH works inside tests"
+PRINT ""
+
+# ============================================
+# TEST 14: Test with Loop
+# ============================================
+PRINT "============================================"
+PRINT "TEST 14: Test with Loop"
+PRINT "============================================"
+
+TEST SUITE "Loop Tests":
+
+  TEST "can use loops in tests":
+    VAR items = ["a", "b", "c"]
+    VAR count = 0
+
+    FOR item IN items:
+      VAR count = count + 1
+    END FOR
+
+    ASSERT count == 3
+  END TEST
+
+  TEST "can assert in loop":
+    VAR numbers = [1, 2, 3, 4, 5]
+
+    FOR num IN numbers:
+      ASSERT num > 0
+      ASSERT num <= 5
+    END FOR
+  END TEST
+
+END TEST SUITE
+
+PRINT "Loops work inside tests"
+PRINT "Can run assertions in loops"
+PRINT ""
+
+# ============================================
+# TEST 15: Integration Test Example
+# ============================================
+PRINT "============================================"
+PRINT "TEST 15: Integration Test Example"
+PRINT "============================================"
+
+AGENT DataProcessor:
+  MODEL: sonnet
+  PROMPT: "You process and transform data."
+
+TEST SUITE "Integration Tests":
+
+  SETUP:
+    VAR test_input = {
+      records: [
+        {id: 1, value: "A"},
+        {id: 2, value: "B"},
+        {id: 3, value: "C"}
+      ],
+      metadata: {source: "test", timestamp: "2026-01-09"}
+    }
+  END SETUP
+
+  TEST "full data processing workflow":
+    # Mock all stages
+    MOCK DataProcessor FOR TASK MATCHING "*validate*" RETURNS {
+      valid: true,
+      errors: []
+    }
+
+    MOCK DataProcessor FOR TASK MATCHING "*transform*" RETURNS {
+      transformed: [
+        {id: 1, value: "A", processed: true},
+        {id: 2, value: "B", processed: true},
+        {id: 3, value: "C", processed: true}
+      ]
+    }
+
+    MOCK DataProcessor FOR TASK MATCHING "*summarize*" RETURNS {
+      total: 3,
+      successful: 3,
+      failed: 0
+    }
+
+    VAR processor = NEW DataProcessor()
+
+    # Run pipeline
+    VAR validation = RUN SESSION(processor):
+      TASK: "Validate input data"
+      INPUT: {test_input}
+
+    ASSERT validation.valid IS TRUE
+    ASSERT validation.errors.length == 0
+
+    VAR transformed = RUN SESSION(processor):
+      TASK: "Transform records"
+      INPUT: {test_input}
+
+    ASSERT transformed.transformed.length == 3
+    ASSERT transformed.transformed[0].processed IS TRUE
+
+    VAR summary = RUN SESSION(processor):
+      TASK: "Summarize results"
+      INPUT: {transformed}
+
+    ASSERT summary.total == 3
+    ASSERT summary.failed == 0
+  END TEST
+
+END TEST SUITE
+
+PRINT "Integration tests combine multiple mocks"
+PRINT "Test complete workflows end-to-end"
+PRINT ""
+
+# ============================================
+# FINAL SUMMARY
+# ============================================
+PRINT "============================================"
+PRINT "Module 13 Testing Framework Tests Complete!"
+PRINT "============================================"
+PRINT ""
+PRINT "Features tested:"
+PRINT "  TEST 1:  TEST SUITE declaration"
+PRINT "  TEST 2:  SETUP and TEARDOWN"
+PRINT "  TEST 3:  Simple MOCK"
+PRINT "  TEST 4:  Task-specific MOCK patterns"
+PRINT "  TEST 5:  MOCK THROWS (error simulation)"
+PRINT "  TEST 6:  Literal ASSERT operators"
+PRINT "  TEST 7:  Semantic ASSERT"
+PRINT "  TEST 8:  Custom ASSERT MESSAGE"
+PRINT "  TEST 9:  Multiple mocks in one test"
+PRINT "  TEST 10: Test isolation"
+PRINT "  TEST 11: Standalone TEST"
+PRINT "  TEST 12: Nested data assertions"
+PRINT "  TEST 13: Error handling in tests"
+PRINT "  TEST 14: Loops in tests"
+PRINT "  TEST 15: Integration test example"
+PRINT ""
+PRINT "Testing Framework Summary:"
+PRINT "  TEST SUITE: Organize related tests"
+PRINT "  SETUP/TEARDOWN: Shared initialization/cleanup"
+PRINT "  MOCK: Replace AI calls with fixed values"
+PRINT "  ASSERT: Verify conditions (literal and semantic)"
+PRINT ""
+PRINT "Benefits:"
+PRINT "  - Zero cost (mocked sessions don't call AI)"
+PRINT "  - Reproducible (fixed mock values)"
+PRINT "  - Fast (no API latency)"
+PRINT "  - Organized (suites group related tests)"
+PRINT ""
+PRINT "Run tests with: /cheesecake test"
+PRINT ""
+PRINT "All Module 13 features validated!"
