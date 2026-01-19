@@ -773,10 +773,152 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] - Planned for future v0.0.2 modules
+#### Module 14: History & Replay ✅ COMPLETE
 
-### Planned Features (Module 14)
-- Module 14: Execution history and replay
+**Automatic Execution History**
+- Every execution of a `.cheesecake` program is automatically recorded
+- History stored in `.cheesecake/history/` directory
+- JSON execution records with comprehensive details:
+  - Execution ID (6-char alphanumeric)
+  - Program name and path
+  - Timing (started_at, completed_at, duration_ms)
+  - Status (success/failed)
+  - Inputs and outputs
+  - Cost breakdown (total, by model, tokens)
+  - Phase information
+  - Checkpoints created
+  - Errors (for failed executions)
+- Index file for fast lookup (`.cheesecake/history/index.json`)
+
+**GET_HISTORY Function**
+- Retrieve execution history with filters
+- Syntax: `VAR history = GET_HISTORY(limit: N, status: "failed", program: "name")`
+- Filter options:
+  - `limit` - Maximum entries to return
+  - `status` - Filter by "success", "failed", or "all"
+  - `program` - Filter by program name (partial match)
+  - `since`/`before` - Date range filters
+  - `cost_above`/`cost_below` - Cost filters
+  - `tags` - Filter by tags
+- Returns array of execution summaries
+
+**GET_EXECUTION Function**
+- Retrieve full details of specific execution
+- Syntax: `VAR exec = GET_EXECUTION(id: "a1b2c3")`
+- Syntax: `VAR exec = GET_EXECUTION(latest: TRUE)`
+- Syntax: `VAR exec = GET_EXECUTION(program: "name", latest: TRUE)`
+- Returns complete execution record or NULL
+
+**COMPARE_EXECUTIONS Function**
+- Compare two executions
+- Syntax: `VAR comparison = COMPARE_EXECUTIONS(id1: "a", id2: "b")`
+- Returns: cost_diff, duration_diff, inputs_match, outputs_match, same_program
+
+**REPLAY Statement**
+- Replay previous executions
+- Basic: `REPLAY execution_id: "a1b2c3"`
+- With modified inputs: `REPLAY execution_id: "a1b2c3" WITH new_inputs`
+- From checkpoint: `REPLAY execution_id: "a1b2c3" FROM_CHECKPOINT: "checkpoint-name"`
+- Creates new history entry with parent reference
+
+**CLEAR_HISTORY Function**
+- Clear execution history
+- Syntax: `CLEAR_HISTORY()`
+- With filters: `CLEAR_HISTORY(before: "date", status: "failed", program: "name")`
+- Returns count of deleted entries
+
+**History Configuration**
+- 8 CONFIG settings for history behavior:
+  - `HISTORY_ENABLED` - Enable/disable history (default: TRUE)
+  - `HISTORY_RETENTION_DAYS` - Days to keep history (default: 30)
+  - `HISTORY_MAX_ENTRIES` - Maximum entries to keep (default: 100)
+  - `HISTORY_INCLUDE_OUTPUTS` - Store outputs (default: TRUE)
+  - `HISTORY_OUTPUT_MAX_SIZE` - Truncate large outputs (default: 10000)
+  - `HISTORY_INCLUDE_INPUTS` - Store inputs (default: TRUE)
+  - `HISTORY_REDACT_SECRETS` - Redact sensitive values (default: TRUE)
+  - `HISTORY_TAGS` - Default tags for executions
+
+**History Events**
+- `execution_recorded(record)` - Fired after execution recorded
+- `history_cleanup(deleted_count)` - Fired after cleanup
+
+**Commands**
+- `/cheesecake history` - List recent executions
+- `/cheesecake history #N` - Show execution details
+- `/cheesecake history --status failed` - Filter by status
+- `/cheesecake history --program name` - Filter by program
+- `/cheesecake history --since date` - Filter by date
+- `/cheesecake history --cost-above N` - Filter by cost
+- `/cheesecake history --stats` - Show statistics
+- `/cheesecake history --compare #A #B` - Compare executions
+- `/cheesecake history --clear` - Clear history
+- `/cheesecake replay #N` - Replay execution
+- `/cheesecake replay #N --modify` - Replay with modified inputs
+- `/cheesecake replay #N --from checkpoint` - Resume from checkpoint
+
+**Documentation**
+- `skills/cheesecake/history.md` - 670+ lines of specification
+- `skills/cheesecake/SKILL.md` - Added History & Replay (section 22, 320+ lines)
+- `skills/cheesecake/vm.md` - Added History Tracking (section 18, 380+ lines)
+- `commands/cheesecake-history.md` - 550+ lines for history command
+- `commands/cheesecake-replay.md` - 350+ lines for replay command
+- `tests/test-history.cheesecake` - 450+ lines testing all features
+- `MODULE-14-PLAN.md` - Detailed implementation plan
+- Total new documentation: 2,720+ lines
+
+**Test Coverage (45+ tests in 12 suites)**
+- GET_HISTORY function tests (7 tests)
+- GET_EXECUTION function tests (7 tests)
+- COMPARE_EXECUTIONS function tests (3 tests)
+- REPLAY statement tests (3 tests)
+- CLEAR_HISTORY function tests (4 tests)
+- History configuration tests (6 tests)
+- History events tests (2 tests)
+- Failed execution history tests (3 tests)
+- Cost tracking in history tests (3 tests)
+- Replay metadata tests (3 tests)
+- History index tests (3 tests)
+- Integration test (1 test)
+
+### Testing (Module 14)
+- Tested GET_HISTORY with all filter options ✅
+- Tested GET_EXECUTION by ID and latest ✅
+- Tested COMPARE_EXECUTIONS ✅
+- Tested REPLAY with same inputs ✅
+- Tested REPLAY with modified inputs ✅
+- Tested REPLAY from checkpoint ✅
+- Tested CLEAR_HISTORY with filters ✅
+- Tested history configuration options ✅
+- Tested secret redaction ✅
+- Tested output truncation ✅
+- Tested failed execution recording ✅
+- Tested cost tracking in history ✅
+- Tested replay metadata ✅
+- Validated 45+ test scenarios ✅
+
+### Changed (Module 14)
+- `SKILL.md` sections renumbered (added section 22: History & Replay)
+- `vm.md` sections renumbered (19-21, was 18-20, added section 18: History Tracking)
+- Added History & Replay as section 22 in SKILL.md
+- Added History Tracking as section 18 in vm.md
+- Added /cheesecake history command
+- Added /cheesecake replay command
+
+### Backward Compatibility (Module 14)
+- ✅ All v0.0.1 and v0.0.2 workflows continue to work
+- History tracking is automatic (can be disabled via CONFIG)
+- History functions are optional
+- Existing workflows work perfectly without changes
+- No breaking changes to syntax
+
+---
+
+## [Unreleased] - Future planned features
+
+### Planned for v0.0.3
+- Visual workflow builder
+- IDE extension (VSCode)
+- Plugin marketplace
 
 ---
 

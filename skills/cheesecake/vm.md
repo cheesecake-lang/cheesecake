@@ -1,7 +1,7 @@
 # CheeseCake VM Execution Semantics
 # Purpose: Define how AI agents execute .cheesecake programs
 # Part of: CheeseCake v0.0.1 - Module 3 (VM Execution Engine)
-# Updated: v0.0.2 - Added INTERACTIVE (M10), Cost Management (M11), Events (M12), Testing (M13), Program Contracts
+# Updated: v0.0.2 - Added INTERACTIVE (M10), Cost Management (M11), Events (M12), Testing (M13), Program Contracts, History & Replay (M14)
 #
 # IMPORTANT: You (the AI) ARE the CheeseCake VM.
 # This is not a metaphor. When you read and execute a .cheesecake file,
@@ -2382,7 +2382,391 @@ During execution, report progress to user:
 
 ---
 
-## 18. Special Behaviors
+## 18. History & Replay Tracking (v0.0.2+)
+
+The VM automatically tracks execution history unless disabled. See `history.md` for complete specification.
+
+### Execution Recording Protocol
+
+**When execution starts:**
+
+```
+execution_record = {
+  id: generate_short_id(),  # 6-char alphanumeric: "a1b2c3"
+  program: current_program_name,
+  program_path: absolute_path,
+  timing: {
+    started_at: NOW()
+  },
+  status: "running",
+  inputs: {},
+  outputs: {},
+  cost: {total_usd: 0, sessions_count: 0, tokens: {input: 0, output: 0}},
+  phases: [],
+  checkpoints: [],
+  errors: [],
+  config: {},
+  metadata: {triggered_by: "cli", parent_execution: null}
+}
+```
+
+**During execution:**
+
+```
+1. Capture INPUT declarations → execution_record.inputs
+2. Track phase transitions:
+   On PHASE start:
+     current_phase = {name: phase_name, started_at: NOW(), status: "running"}
+   On PHASE end:
+     current_phase.completed_at = NOW()
+     current_phase.duration_ms = calculate_duration()
+     current_phase.status = "success" | "failed"
+     execution_record.phases.push(current_phase)
+
+3. Record checkpoint creations:
+   On CHECKPOINT:
+     execution_record.checkpoints.push({
+       name: checkpoint_name,
+       created_at: NOW(),
+       variables_saved: list_of_saved_vars
+     })
+
+4. Accumulate cost data:
+   After each session:
+     execution_record.cost.total_usd += session_cost
+     execution_record.cost.sessions_count++
+     execution_record.cost.tokens.input += session_input_tokens
+     execution_record.cost.tokens.output += session_output_tokens
+
+5. Capture errors (if any):
+   On error:
+     execution_record.errors.push({
+       type: error_type,
+       message: error_message,
+       phase: current_phase_name,
+       line: line_number,
+       statement: statement_text
+     })
+```
+
+**On completion:**
+
+```
+1. Record timing:
+   execution_record.timing.completed_at = NOW()
+   execution_record.timing.duration_ms = calculate_duration()
+
+2. Set final status:
+   execution_record.status = "success" | "failed"
+
+3. Collect outputs:
+   For each OUTPUT declaration:
+     execution_record.outputs[name] = value
+
+4. Apply secret redaction (if HISTORY_REDACT_SECRETS: TRUE):
+   For each input/output:
+     If name matches secret pattern (password, key, token, secret, credential):
+       execution_record.inputs[name] = "[REDACTED]"
+       execution_record.outputs[name] = "[REDACTED]"
+
+5. Truncate large outputs (if HISTORY_OUTPUT_MAX_SIZE set):
+   For each output:
+     If size > HISTORY_OUTPUT_MAX_SIZE:
+       Truncate and add "[TRUNCATED]" marker
+
+6. Write to history:
+   filename = "{timestamp}_{program}_{id}.json"
+   path = ".cheesecake/history/" + filename
+   WRITE execution_record TO path
+
+7. Update index:
+   Load ".cheesecake/history/index.json"
+   Add execution summary to index.executions
+   Update index.last_updated
+   WRITE index
+```
+
+### History Storage Format
+
+```
+.cheesecake/
+  history/
+    2026-01-14T10-30-00_workflow_a1b2c3.json
+    2026-01-14T11-45-00_research_d4e5f6.json
+    index.json
+
+Filename format: {ISO_timestamp}_{program_name}_{execution_id}.json
+```
+
+### Index File Structure
+
+```json
+{
+  "last_updated": "2026-01-14T14:20:00Z",
+  "total_executions": 47,
+  "executions": [
+    {
+      "id": "a1b2c3",
+      "program": "workflow.cheesecake",
+      "status": "success",
+      "started_at": "2026-01-14T10:30:00Z",
+      "duration_ms": 165000,
+      "cost_usd": 0.12
+    }
+  ]
+}
+```
+
+### Cleanup Protocol
+
+```
+cleanup_history():
+  1. Check HISTORY_RETENTION_DAYS:
+     For each execution older than retention period:
+       Delete execution file
+       Remove from index
+
+  2. Check HISTORY_MAX_ENTRIES:
+     If total > max_entries:
+       Sort by date (oldest first)
+       Delete oldest until count <= max_entries
+       Update index
+
+  3. Save updated index
+```
+
+### GET_HISTORY Function Execution
+
+```cheesecake
+VAR history = GET_HISTORY(limit: 5, status: "failed")
+```
+
+**VM Behavior:**
+
+```
+1. Load index file
+2. Filter executions by parameters:
+   - status: filter by status field
+   - program: filter by program name (partial match)
+   - since/before: filter by date range
+   - cost_above/cost_below: filter by cost
+   - tags: filter by tags array
+3. Sort by started_at (newest first)
+4. Apply limit
+5. Return array of execution summaries
+```
+
+### GET_EXECUTION Function Execution
+
+```cheesecake
+VAR exec = GET_EXECUTION(id: "a1b2c3")
+```
+
+**VM Behavior:**
+
+```
+1. If 'id' provided:
+   Look up execution by ID in index
+   Load full execution record from file
+   Return execution record (or NULL if not found)
+
+2. If 'latest: TRUE':
+   Get most recent execution from index
+   Load full record
+   Return execution record
+
+3. If 'program' + 'latest':
+   Filter index by program name
+   Get most recent
+   Load full record
+   Return execution record
+```
+
+### REPLAY Statement Execution
+
+```cheesecake
+REPLAY execution_id: "a1b2c3"
+REPLAY execution_id: "a1b2c3" WITH modified_inputs
+REPLAY execution_id: "a1b2c3" FROM_CHECKPOINT: "research-complete"
+```
+
+**VM Behavior:**
+
+```
+1. Load original execution record:
+   original = GET_EXECUTION(id: "a1b2c3")
+   If not found: ERROR "Execution not found"
+
+2. Verify program file exists:
+   If NOT file_exists(original.program_path):
+     ERROR "Program file no longer exists"
+
+3. Determine inputs:
+   If WITH clause:
+     inputs = merge(original.inputs, modified_inputs)
+     modified_fields = list_modified_keys()
+   Else:
+     inputs = original.inputs
+     modified_fields = []
+
+4. Handle FROM_CHECKPOINT:
+   If FROM_CHECKPOINT clause:
+     checkpoint = find_checkpoint(original, checkpoint_name)
+     If not found: ERROR "Checkpoint not found"
+     Load checkpoint state
+     Set resume_point = checkpoint
+
+5. Create new execution record:
+   new_record = {
+     ...standard_fields,
+     metadata: {
+       triggered_by: "replay",
+       parent_execution: original.id,
+       replayed_from_checkpoint: checkpoint_name | null,
+       modified_inputs: modified_fields
+     }
+   }
+
+6. Execute program:
+   If FROM_CHECKPOINT:
+     Restore checkpoint state
+     Resume from checkpoint point
+   Else:
+     Execute from beginning with inputs
+
+7. Record result in history (as new entry)
+```
+
+### COMPARE_EXECUTIONS Function Execution
+
+```cheesecake
+VAR comparison = COMPARE_EXECUTIONS(id1: "a1b2c3", id2: "d4e5f6")
+```
+
+**VM Behavior:**
+
+```
+1. Load both executions:
+   exec1 = GET_EXECUTION(id: "a1b2c3")
+   exec2 = GET_EXECUTION(id: "d4e5f6")
+
+2. Compare fields:
+   comparison = {
+     cost_diff: exec2.cost.total_usd - exec1.cost.total_usd,
+     duration_diff: exec2.timing.duration_ms - exec1.timing.duration_ms,
+     inputs_match: deep_equals(exec1.inputs, exec2.inputs),
+     outputs_match: deep_equals(exec1.outputs, exec2.outputs),
+     same_program: exec1.program == exec2.program
+   }
+
+3. Return comparison object
+```
+
+### CLEAR_HISTORY Function Execution
+
+```cheesecake
+CLEAR_HISTORY(before: "2026-01-01", status: "failed")
+```
+
+**VM Behavior:**
+
+```
+1. Load index
+2. Filter executions matching criteria
+3. For each matching execution:
+   Delete execution file
+   Remove from index
+4. Save updated index
+5. Return count of deleted entries
+```
+
+### History Events
+
+The VM emits events during history operations:
+
+```
+After recording:
+  EMIT execution_recorded(record: execution_record)
+
+After cleanup:
+  EMIT history_cleanup(deleted_count: N)
+```
+
+### CONFIG Integration
+
+History settings from CONFIG block:
+
+```cheesecake
+CONFIG:
+  HISTORY_ENABLED: TRUE           # Default: TRUE
+  HISTORY_RETENTION_DAYS: 30      # Default: 30
+  HISTORY_MAX_ENTRIES: 100        # Default: 100
+  HISTORY_INCLUDE_OUTPUTS: TRUE   # Default: TRUE
+  HISTORY_OUTPUT_MAX_SIZE: 10000  # Default: 10000 bytes
+  HISTORY_INCLUDE_INPUTS: TRUE    # Default: TRUE
+  HISTORY_REDACT_SECRETS: TRUE    # Default: TRUE
+  HISTORY_TAGS: ["prod"]          # Default: []
+END CONFIG
+```
+
+**VM Behavior:**
+
+```
+1. Parse history settings from CONFIG
+2. If HISTORY_ENABLED: FALSE:
+   Skip all history recording
+   Return immediately from history functions
+3. Apply settings during execution
+```
+
+### Failed Execution Recording
+
+On execution failure:
+
+```
+1. Capture error details:
+   execution_record.error = {
+     type: error_type,
+     message: error_message,
+     phase: current_phase,
+     line: error_line,
+     statement: error_statement,
+     stack: build_stack_trace()
+   }
+
+2. Capture partial outputs (if any)
+3. Set status: "failed"
+4. Record to history (still saves failed executions)
+```
+
+### VM Implementation Checklist
+
+For history tracking to work:
+
+- [ ] Generate unique 6-char execution IDs
+- [ ] Initialize execution record at start
+- [ ] Capture inputs from INPUT declarations
+- [ ] Track phase transitions
+- [ ] Record checkpoint creations
+- [ ] Accumulate cost data per session
+- [ ] Capture errors with full context
+- [ ] Collect outputs at end
+- [ ] Apply secret redaction
+- [ ] Truncate large outputs
+- [ ] Write execution record to file
+- [ ] Maintain index file
+- [ ] Implement cleanup based on retention settings
+- [ ] Implement GET_HISTORY function
+- [ ] Implement GET_EXECUTION function
+- [ ] Implement COMPARE_EXECUTIONS function
+- [ ] Implement REPLAY statement
+- [ ] Implement CLEAR_HISTORY function
+- [ ] Emit history events
+- [ ] Handle HISTORY_ENABLED: FALSE
+
+---
+
+## 19. Special Behaviors
 
 ### Semantic Inference
 

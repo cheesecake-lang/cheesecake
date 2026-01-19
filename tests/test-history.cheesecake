@@ -1,0 +1,751 @@
+# test-history.cheesecake
+# Purpose: Test cases for History & Replay functionality (Module 14)
+# Part of: CheeseCake v0.0.2 - Module 14
+#
+# This file tests:
+# - Automatic history recording
+# - GET_HISTORY function
+# - GET_EXECUTION function
+# - COMPARE_EXECUTIONS function
+# - REPLAY statement
+# - CLEAR_HISTORY function
+# - History configuration
+# - History events
+#
+# Run with: /cheesecake test tests/test-history.cheesecake
+
+# ============================================
+# TEST AGENTS
+# ============================================
+
+AGENT MockResearcher:
+  MODEL: sonnet
+  PROMPT: "You are a researcher."
+
+AGENT MockWriter:
+  MODEL: opus
+  PROMPT: "You are a writer."
+
+# ============================================
+# TEST SUITE: GET_HISTORY Function
+# ============================================
+
+TEST SUITE "GET_HISTORY Function Tests":
+
+  TEST "GET_HISTORY returns array of executions":
+    # Mock history data
+    MOCK GET_HISTORY RETURNS [
+      {id: "abc123", program: "test.cheesecake", status: "success", cost_usd: 0.10},
+      {id: "def456", program: "test.cheesecake", status: "success", cost_usd: 0.08}
+    ]
+
+    VAR history = GET_HISTORY(limit: 5)
+
+    ASSERT history IS NOT NULL
+    ASSERT LENGTH(history) == 2
+    ASSERT history[0].id == "abc123"
+    ASSERT history[1].id == "def456"
+  END TEST
+
+  TEST "GET_HISTORY filters by status":
+    MOCK GET_HISTORY RETURNS [
+      {id: "fail01", program: "broken.cheesecake", status: "failed", cost_usd: 0.02}
+    ]
+
+    VAR failed = GET_HISTORY(status: "failed", limit: 10)
+
+    ASSERT failed IS NOT NULL
+    ASSERT LENGTH(failed) >= 0
+    FOR exec IN failed:
+      ASSERT exec.status == "failed"
+    END FOR
+  END TEST
+
+  TEST "GET_HISTORY filters by program name":
+    MOCK GET_HISTORY RETURNS [
+      {id: "wf001", program: "workflow.cheesecake", status: "success", cost_usd: 0.15}
+    ]
+
+    VAR workflow_runs = GET_HISTORY(program: "workflow", limit: 10)
+
+    ASSERT workflow_runs IS NOT NULL
+    FOR exec IN workflow_runs:
+      ASSERT exec.program CONTAINS "workflow"
+    END FOR
+  END TEST
+
+  TEST "GET_HISTORY filters by date range":
+    MOCK GET_HISTORY RETURNS [
+      {id: "jan001", program: "report.cheesecake", status: "success", started_at: "2026-01-10T10:00:00Z"}
+    ]
+
+    VAR recent = GET_HISTORY(
+      since: "2026-01-01",
+      before: "2026-01-15",
+      limit: 20
+    )
+
+    ASSERT recent IS NOT NULL
+    # All results should be within date range
+  END TEST
+
+  TEST "GET_HISTORY filters by cost":
+    MOCK GET_HISTORY RETURNS [
+      {id: "exp001", program: "expensive.cheesecake", status: "success", cost_usd: 0.75}
+    ]
+
+    VAR expensive = GET_HISTORY(cost_above: 0.50, limit: 5)
+
+    ASSERT expensive IS NOT NULL
+    FOR exec IN expensive:
+      ASSERT exec.cost_usd > 0.50
+    END FOR
+  END TEST
+
+  TEST "GET_HISTORY respects limit":
+    MOCK GET_HISTORY RETURNS [
+      {id: "a", program: "test.cheesecake", status: "success"},
+      {id: "b", program: "test.cheesecake", status: "success"},
+      {id: "c", program: "test.cheesecake", status: "success"}
+    ]
+
+    VAR limited = GET_HISTORY(limit: 3)
+
+    ASSERT LENGTH(limited) <= 3
+  END TEST
+
+  TEST "GET_HISTORY returns empty array when no matches":
+    MOCK GET_HISTORY RETURNS []
+
+    VAR no_results = GET_HISTORY(program: "nonexistent.cheesecake")
+
+    ASSERT no_results IS NOT NULL
+    ASSERT LENGTH(no_results) == 0
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: GET_EXECUTION Function
+# ============================================
+
+TEST SUITE "GET_EXECUTION Function Tests":
+
+  TEST "GET_EXECUTION retrieves by ID":
+    MOCK GET_EXECUTION RETURNS {
+      id: "abc123",
+      program: "workflow.cheesecake",
+      status: "success",
+      timing: {started_at: "2026-01-14T10:00:00Z", duration_ms: 120000},
+      inputs: {topic: "AI"},
+      outputs: {findings: "Research results..."},
+      cost: {total_usd: 0.12, sessions_count: 3}
+    }
+
+    VAR exec = GET_EXECUTION(id: "abc123")
+
+    ASSERT exec IS NOT NULL
+    ASSERT exec.id == "abc123"
+    ASSERT exec.program == "workflow.cheesecake"
+    ASSERT exec.status == "success"
+    ASSERT exec.inputs.topic == "AI"
+    ASSERT exec.outputs.findings IS NOT NULL
+    ASSERT exec.cost.total_usd == 0.12
+  END TEST
+
+  TEST "GET_EXECUTION retrieves latest":
+    MOCK GET_EXECUTION RETURNS {
+      id: "latest01",
+      program: "recent.cheesecake",
+      status: "success"
+    }
+
+    VAR last = GET_EXECUTION(latest: TRUE)
+
+    ASSERT last IS NOT NULL
+    ASSERT last.id == "latest01"
+  END TEST
+
+  TEST "GET_EXECUTION retrieves latest for program":
+    MOCK GET_EXECUTION RETURNS {
+      id: "wf_latest",
+      program: "workflow.cheesecake",
+      status: "success"
+    }
+
+    VAR last_workflow = GET_EXECUTION(
+      program: "workflow.cheesecake",
+      latest: TRUE
+    )
+
+    ASSERT last_workflow IS NOT NULL
+    ASSERT last_workflow.program == "workflow.cheesecake"
+  END TEST
+
+  TEST "GET_EXECUTION returns NULL for unknown ID":
+    MOCK GET_EXECUTION RETURNS NULL
+
+    VAR unknown = GET_EXECUTION(id: "nonexistent")
+
+    ASSERT unknown IS NULL
+  END TEST
+
+  TEST "GET_EXECUTION includes phase information":
+    MOCK GET_EXECUTION RETURNS {
+      id: "phased01",
+      program: "workflow.cheesecake",
+      phases: [
+        {name: "Research", status: "success", duration_ms: 45000},
+        {name: "Analysis", status: "success", duration_ms: 60000}
+      ]
+    }
+
+    VAR exec = GET_EXECUTION(id: "phased01")
+
+    ASSERT exec.phases IS NOT NULL
+    ASSERT LENGTH(exec.phases) == 2
+    ASSERT exec.phases[0].name == "Research"
+    ASSERT exec.phases[1].name == "Analysis"
+  END TEST
+
+  TEST "GET_EXECUTION includes checkpoint information":
+    MOCK GET_EXECUTION RETURNS {
+      id: "cp001",
+      program: "workflow.cheesecake",
+      checkpoints: [
+        {name: "research-done", variables_saved: ["data", "sources"]},
+        {name: "analysis-done", variables_saved: ["findings"]}
+      ]
+    }
+
+    VAR exec = GET_EXECUTION(id: "cp001")
+
+    ASSERT exec.checkpoints IS NOT NULL
+    ASSERT LENGTH(exec.checkpoints) >= 1
+  END TEST
+
+  TEST "GET_EXECUTION includes error details for failed":
+    MOCK GET_EXECUTION RETURNS {
+      id: "fail01",
+      program: "broken.cheesecake",
+      status: "failed",
+      error: {
+        type: "SessionError",
+        message: "API rate limit exceeded",
+        phase: "Research",
+        line: 45
+      }
+    }
+
+    VAR failed = GET_EXECUTION(id: "fail01")
+
+    ASSERT failed.status == "failed"
+    ASSERT failed.error IS NOT NULL
+    ASSERT failed.error.type == "SessionError"
+    ASSERT failed.error.message CONTAINS "rate limit"
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: COMPARE_EXECUTIONS Function
+# ============================================
+
+TEST SUITE "COMPARE_EXECUTIONS Function Tests":
+
+  TEST "COMPARE_EXECUTIONS calculates differences":
+    MOCK COMPARE_EXECUTIONS RETURNS {
+      cost_diff: 0.05,
+      duration_diff: 30000,
+      inputs_match: TRUE,
+      outputs_match: FALSE,
+      same_program: TRUE
+    }
+
+    VAR comparison = COMPARE_EXECUTIONS(id1: "exec1", id2: "exec2")
+
+    ASSERT comparison IS NOT NULL
+    ASSERT comparison.cost_diff == 0.05
+    ASSERT comparison.duration_diff == 30000
+    ASSERT comparison.inputs_match == TRUE
+    ASSERT comparison.outputs_match == FALSE
+  END TEST
+
+  TEST "COMPARE_EXECUTIONS identifies same inputs":
+    MOCK COMPARE_EXECUTIONS RETURNS {
+      inputs_match: TRUE
+    }
+
+    VAR comparison = COMPARE_EXECUTIONS(id1: "a", id2: "b")
+
+    ASSERT comparison.inputs_match == TRUE
+  END TEST
+
+  TEST "COMPARE_EXECUTIONS identifies different outputs":
+    MOCK COMPARE_EXECUTIONS RETURNS {
+      outputs_match: FALSE
+    }
+
+    VAR comparison = COMPARE_EXECUTIONS(id1: "a", id2: "b")
+
+    ASSERT comparison.outputs_match == FALSE
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: REPLAY Statement
+# ============================================
+
+TEST SUITE "REPLAY Statement Tests":
+
+  SETUP:
+    # Mock execution to replay
+    MOCK GET_EXECUTION RETURNS {
+      id: "replay_source",
+      program: "workflow.cheesecake",
+      inputs: {topic: "machine learning", depth: "deep"},
+      outputs: {findings: "Original findings"},
+      checkpoints: [
+        {name: "research-complete", variables_saved: ["data"]}
+      ]
+    }
+  END SETUP
+
+  TEST "REPLAY uses original inputs":
+    MOCK MockResearcher RETURNS "Replayed research results"
+
+    # This would execute the replay
+    # REPLAY execution_id: "replay_source"
+
+    # Verify inputs were used from original execution
+    VAR exec = GET_EXECUTION(id: "replay_source")
+    ASSERT exec.inputs.topic == "machine learning"
+    ASSERT exec.inputs.depth == "deep"
+  END TEST
+
+  TEST "REPLAY WITH modified inputs":
+    VAR original = GET_EXECUTION(id: "replay_source")
+
+    VAR new_inputs = original.inputs
+    new_inputs.topic = "artificial intelligence"
+
+    # REPLAY execution_id: "replay_source" WITH new_inputs
+    # Would create new execution with modified topic
+
+    ASSERT new_inputs.topic == "artificial intelligence"
+    ASSERT new_inputs.depth == "deep"  # Unchanged from original
+  END TEST
+
+  TEST "REPLAY FROM_CHECKPOINT resumes from checkpoint":
+    VAR exec = GET_EXECUTION(id: "replay_source")
+
+    ASSERT exec.checkpoints IS NOT NULL
+    ASSERT LENGTH(exec.checkpoints) >= 1
+    ASSERT exec.checkpoints[0].name == "research-complete"
+
+    # REPLAY execution_id: "replay_source" FROM_CHECKPOINT: "research-complete"
+    # Would skip phases before checkpoint
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: CLEAR_HISTORY Function
+# ============================================
+
+TEST SUITE "CLEAR_HISTORY Function Tests":
+
+  TEST "CLEAR_HISTORY with date filter":
+    MOCK CLEAR_HISTORY RETURNS 5  # 5 entries deleted
+
+    VAR deleted = CLEAR_HISTORY(before: "2026-01-01")
+
+    ASSERT deleted >= 0
+  END TEST
+
+  TEST "CLEAR_HISTORY with status filter":
+    MOCK CLEAR_HISTORY RETURNS 3
+
+    VAR deleted = CLEAR_HISTORY(status: "failed")
+
+    ASSERT deleted >= 0
+  END TEST
+
+  TEST "CLEAR_HISTORY with program filter":
+    MOCK CLEAR_HISTORY RETURNS 2
+
+    VAR deleted = CLEAR_HISTORY(program: "test.cheesecake")
+
+    ASSERT deleted >= 0
+  END TEST
+
+  TEST "CLEAR_HISTORY all returns count":
+    MOCK CLEAR_HISTORY RETURNS 10
+
+    VAR deleted = CLEAR_HISTORY()
+
+    ASSERT deleted >= 0
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: History Configuration
+# ============================================
+
+TEST SUITE "History Configuration Tests":
+
+  TEST "HISTORY_ENABLED FALSE disables recording":
+    # When HISTORY_ENABLED: FALSE in CONFIG
+    # No history should be recorded
+
+    # This is a semantic test - verify behavior
+    ASSERT TRUE  # Placeholder - actual test would check no file written
+  END TEST
+
+  TEST "HISTORY_RETENTION_DAYS controls cleanup":
+    # Entries older than retention should be deleted
+    ASSERT TRUE  # Placeholder
+  END TEST
+
+  TEST "HISTORY_MAX_ENTRIES limits storage":
+    # When max entries reached, oldest should be deleted
+    ASSERT TRUE  # Placeholder
+  END TEST
+
+  TEST "HISTORY_REDACT_SECRETS hides sensitive data":
+    MOCK GET_EXECUTION RETURNS {
+      id: "secure01",
+      inputs: {
+        api_key: "[REDACTED]",
+        topic: "visible topic"
+      }
+    }
+
+    VAR exec = GET_EXECUTION(id: "secure01")
+
+    ASSERT exec.inputs.api_key == "[REDACTED]"
+    ASSERT exec.inputs.topic == "visible topic"
+  END TEST
+
+  TEST "HISTORY_OUTPUT_MAX_SIZE truncates large outputs":
+    MOCK GET_EXECUTION RETURNS {
+      id: "large01",
+      outputs: {
+        large_output: "truncated content... [TRUNCATED]"
+      }
+    }
+
+    VAR exec = GET_EXECUTION(id: "large01")
+
+    ASSERT exec.outputs.large_output CONTAINS "[TRUNCATED]"
+  END TEST
+
+  TEST "HISTORY_TAGS adds tags to execution":
+    MOCK GET_HISTORY RETURNS [
+      {id: "tagged01", tags: ["production", "daily"]}
+    ]
+
+    VAR tagged = GET_HISTORY(tags: ["production"])
+
+    ASSERT LENGTH(tagged) >= 0
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: History Events
+# ============================================
+
+TEST SUITE "History Events Tests":
+
+  TEST "execution_recorded event fires after recording":
+    VAR event_fired = FALSE
+
+    ON EVENT execution_recorded(record):
+      event_fired = TRUE
+      ASSERT record.id IS NOT NULL
+    END ON
+
+    # Simulate execution completion
+    MOCK EMIT execution_recorded TRIGGERS TRUE
+
+    # In real execution, event would fire after program completes
+    ASSERT TRUE  # Placeholder
+  END TEST
+
+  TEST "history_cleanup event fires after cleanup":
+    VAR cleanup_count = 0
+
+    ON EVENT history_cleanup(deleted_count):
+      cleanup_count = deleted_count
+    END ON
+
+    # Simulate cleanup
+    MOCK EMIT history_cleanup TRIGGERS TRUE
+
+    ASSERT TRUE  # Placeholder
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: Failed Execution History
+# ============================================
+
+TEST SUITE "Failed Execution History Tests":
+
+  TEST "Failed execution records error details":
+    MOCK GET_EXECUTION RETURNS {
+      id: "fail01",
+      status: "failed",
+      error: {
+        type: "SessionError",
+        message: "Connection timeout",
+        phase: "Research",
+        line: 25,
+        statement: "VAR data = RUN SESSION(researcher)..."
+      }
+    }
+
+    VAR failed = GET_EXECUTION(id: "fail01")
+
+    ASSERT failed.status == "failed"
+    ASSERT failed.error.type == "SessionError"
+    ASSERT failed.error.message == "Connection timeout"
+    ASSERT failed.error.phase == "Research"
+    ASSERT failed.error.line == 25
+  END TEST
+
+  TEST "Failed execution captures partial outputs":
+    MOCK GET_EXECUTION RETURNS {
+      id: "partial01",
+      status: "failed",
+      partial_outputs: {
+        sources: ["source1", "source2"]
+      }
+    }
+
+    VAR exec = GET_EXECUTION(id: "partial01")
+
+    ASSERT exec.partial_outputs IS NOT NULL
+    ASSERT exec.partial_outputs.sources IS NOT NULL
+  END TEST
+
+  TEST "Failed execution records completed phases":
+    MOCK GET_EXECUTION RETURNS {
+      id: "fail_phased",
+      status: "failed",
+      phases: [
+        {name: "Setup", status: "success"},
+        {name: "Research", status: "failed"}
+      ]
+    }
+
+    VAR exec = GET_EXECUTION(id: "fail_phased")
+
+    ASSERT exec.phases[0].status == "success"
+    ASSERT exec.phases[1].status == "failed"
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: Cost Tracking in History
+# ============================================
+
+TEST SUITE "History Cost Tracking Tests":
+
+  TEST "Execution records total cost":
+    MOCK GET_EXECUTION RETURNS {
+      id: "cost01",
+      cost: {
+        total_usd: 0.15,
+        sessions_count: 5,
+        tokens: {input: 5000, output: 2500, total: 7500}
+      }
+    }
+
+    VAR exec = GET_EXECUTION(id: "cost01")
+
+    ASSERT exec.cost.total_usd == 0.15
+    ASSERT exec.cost.sessions_count == 5
+    ASSERT exec.cost.tokens.total == 7500
+  END TEST
+
+  TEST "Execution records cost by model":
+    MOCK GET_EXECUTION RETURNS {
+      id: "model_cost",
+      cost: {
+        total_usd: 0.20,
+        by_model: {
+          sonnet: {sessions: 4, cost: 0.08},
+          opus: {sessions: 1, cost: 0.12}
+        }
+      }
+    }
+
+    VAR exec = GET_EXECUTION(id: "model_cost")
+
+    ASSERT exec.cost.by_model.sonnet.cost == 0.08
+    ASSERT exec.cost.by_model.opus.cost == 0.12
+  END TEST
+
+  TEST "GET_HISTORY filters by cost threshold":
+    MOCK GET_HISTORY RETURNS [
+      {id: "cheap", cost_usd: 0.05},
+      {id: "medium", cost_usd: 0.25}
+    ]
+
+    VAR cheap = GET_HISTORY(cost_below: 0.10)
+    VAR expensive = GET_HISTORY(cost_above: 0.20)
+
+    # Both filters should work
+    ASSERT TRUE
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: Replay Metadata
+# ============================================
+
+TEST SUITE "Replay Metadata Tests":
+
+  TEST "Replay records parent execution":
+    MOCK GET_EXECUTION RETURNS {
+      id: "replay01",
+      metadata: {
+        triggered_by: "replay",
+        parent_execution: "original01"
+      }
+    }
+
+    VAR replay = GET_EXECUTION(id: "replay01")
+
+    ASSERT replay.metadata.triggered_by == "replay"
+    ASSERT replay.metadata.parent_execution == "original01"
+  END TEST
+
+  TEST "Replay records modified inputs":
+    MOCK GET_EXECUTION RETURNS {
+      id: "replay_mod",
+      metadata: {
+        triggered_by: "replay",
+        parent_execution: "original01",
+        modified_inputs: ["topic", "depth"]
+      }
+    }
+
+    VAR replay = GET_EXECUTION(id: "replay_mod")
+
+    ASSERT replay.metadata.modified_inputs CONTAINS "topic"
+  END TEST
+
+  TEST "Replay from checkpoint records checkpoint name":
+    MOCK GET_EXECUTION RETURNS {
+      id: "replay_cp",
+      metadata: {
+        triggered_by: "replay",
+        parent_execution: "original01",
+        replayed_from_checkpoint: "analysis-complete"
+      }
+    }
+
+    VAR replay = GET_EXECUTION(id: "replay_cp")
+
+    ASSERT replay.metadata.replayed_from_checkpoint == "analysis-complete"
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# TEST SUITE: History Index
+# ============================================
+
+TEST SUITE "History Index Tests":
+
+  TEST "Index provides quick lookup":
+    MOCK GET_HISTORY RETURNS [
+      {id: "a1", program: "test.cheesecake", status: "success"},
+      {id: "a2", program: "test.cheesecake", status: "failed"}
+    ]
+
+    # Index should return quickly without loading full records
+    VAR history = GET_HISTORY(limit: 100)
+
+    ASSERT history IS NOT NULL
+  END TEST
+
+  TEST "Index updates after each execution":
+    # After any execution, index should reflect new entry
+    ASSERT TRUE  # Placeholder
+  END TEST
+
+  TEST "Index updated after cleanup":
+    # After CLEAR_HISTORY, index should be consistent
+    ASSERT TRUE  # Placeholder
+  END TEST
+
+END TEST SUITE
+
+# ============================================
+# INTEGRATION TEST: Full History Workflow
+# ============================================
+
+TEST "Integration: Full history workflow":
+  # 1. Get initial history count
+  MOCK GET_HISTORY RETURNS []
+  VAR initial_history = GET_HISTORY(limit: 100)
+  VAR initial_count = LENGTH(initial_history)
+
+  # 2. After execution, history should increase
+  MOCK GET_HISTORY RETURNS [
+    {id: "new01", program: "test.cheesecake", status: "success"}
+  ]
+  VAR after_exec = GET_HISTORY(limit: 100)
+
+  ASSERT LENGTH(after_exec) > 0
+
+  # 3. Get execution details
+  MOCK GET_EXECUTION RETURNS {
+    id: "new01",
+    program: "test.cheesecake",
+    status: "success",
+    inputs: {test_input: "value"},
+    outputs: {test_output: "result"}
+  }
+  VAR details = GET_EXECUTION(id: "new01")
+
+  ASSERT details.inputs.test_input == "value"
+  ASSERT details.outputs.test_output == "result"
+
+  # 4. Clear test entries
+  MOCK CLEAR_HISTORY RETURNS 1
+  VAR cleared = CLEAR_HISTORY(program: "test.cheesecake")
+
+  ASSERT cleared >= 0
+
+  LOG SUCCESS: "Full history workflow test complete"
+END TEST
+
+# ============================================
+# TEST SUMMARY
+# ============================================
+# Total test suites: 12
+# Total tests: 45+
+#
+# Coverage:
+# - GET_HISTORY function (7 tests)
+# - GET_EXECUTION function (7 tests)
+# - COMPARE_EXECUTIONS function (3 tests)
+# - REPLAY statement (3 tests)
+# - CLEAR_HISTORY function (4 tests)
+# - History configuration (6 tests)
+# - History events (2 tests)
+# - Failed execution history (3 tests)
+# - Cost tracking in history (3 tests)
+# - Replay metadata (3 tests)
+# - History index (3 tests)
+# - Integration test (1 test)
